@@ -89,6 +89,9 @@ public partial class App : Application
 
     void ConfigureContextMenu()
     {
+        var link = new MenuItem { Header = "Made by Github.com/BitSwapper..." };
+        link.Click += OpenLink;
+
         var settingsMenuItem = new MenuItem { Header = "Settings..." };
         settingsMenuItem.Click += SettingsMenuItem_Click;
 
@@ -96,6 +99,7 @@ public partial class App : Application
         exitMenuItem.Click += ExitMenuItem_Click;
 
         var contextMenu = new ContextMenu();
+        contextMenu.Items.Add(link);
         contextMenu.Items.Add(settingsMenuItem);
         contextMenu.Items.Add(new Separator());
         contextMenu.Items.Add(exitMenuItem);
@@ -115,6 +119,25 @@ public partial class App : Application
 
     void SettingsMenuItem_Click(object sender, RoutedEventArgs e) => OpenSettingsWindow();
 
+    private void OpenLink(object sender, RoutedEventArgs e)
+    {
+        string url = "https://github.com/BitSwapper";
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            };
+
+            Process.Start(psi);
+        }
+        catch(Exception ex)
+        {
+            MessageBox.Show($"Could not open the link: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
     void OpenSettingsWindow()
     {
         if(settingsWindow != null && settingsWindow.IsLoaded)
