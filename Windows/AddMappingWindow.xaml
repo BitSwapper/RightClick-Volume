@@ -1,0 +1,38 @@
+﻿<Window x:Class="RightClickVolume.AddMappingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:RightClickVolume"
+        mc:Ignorable="d"
+        Title="Add/Edit Manual Mapping" Height="200" Width="400"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False" >
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="UIA Name (Key):" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <TextBox x:Name="UiaNameTextBox" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" VerticalAlignment="Center" Margin="0,5"/>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Target Process Name:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <TextBox x:Name="ProcessNameTextBox" Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Margin="0,5"/>
+        <Button x:Name="BrowseButton" Grid.Row="1" Grid.Column="2" Content="Browse..." Width="70" Margin="5,5,0,5" Click="BrowseButton_Click"/>
+
+        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="(Enter process name without .exe')" FontStyle="Italic" FontSize="10" Foreground="Gray" Margin="0,0,0,10"/>
+
+        <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="OK" Width="80" Margin="5,0" Click="OkButton_Click" IsDefault="True"/>
+            <Button Content="Cancel" Width="80" Margin="5,0" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>
