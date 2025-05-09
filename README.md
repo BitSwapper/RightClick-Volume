@@ -1,4 +1,4 @@
-Enjoy fast access to application-specific volume controls directly from your taskbar. With a simple Hotkey + Right-click on any active application, or taskbar icon, you can instantly adjust volume levels without interrupting your workflow.
+Enjoy fast access to application-specific volume controls. With a simple Hotkey + Right-click on any active window, or taskbar icon, you can instantly adjust volume levels without interrupting your workflow.
 
 
 ![image](https://github.com/user-attachments/assets/50c06122-d0f6-40c5-b73b-e25239e5f4b2)
