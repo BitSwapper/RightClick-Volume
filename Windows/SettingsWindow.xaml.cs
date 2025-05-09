@@ -25,6 +25,7 @@ public partial class SettingsWindow : Window
     void LoadSettings()
     {
         LaunchOnStartupCheckBox.IsChecked = Settings.Default.LaunchOnStartup;
+        ShowPeakVolumeBarCheckBox.IsChecked = Settings.Default.ShowPeakVolumeBar;
         LoadHotkeySettings();
         LoadMappings();
     }
@@ -121,6 +122,7 @@ public partial class SettingsWindow : Window
     void SaveSettings()
     {
         SaveStartupSetting();
+        Settings.Default.ShowPeakVolumeBar = ShowPeakVolumeBarCheckBox.IsChecked ?? false;
         SaveHotkeySettings();
         SaveMappings();
         TrySaveSettingsToStorage();

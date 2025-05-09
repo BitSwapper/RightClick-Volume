@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
@@ -12,109 +13,135 @@ public class AudioManager : IDisposable
 {
     MMDeviceEnumerator deviceEnumerator;
     MMDevice defaultPlaybackDevice;
-    readonly Dictionary<uint, string> processExecutables = new Dictionary<uint, string>();
+    readonly Dictionary<uint, string> processIdToNameCache = new Dictionary<uint, string>();
+    readonly Dictionary<uint, string> processIdToPathCache = new Dictionary<uint, string>();
 
     public AudioManager()
     {
         try
         {
             deviceEnumerator = new MMDeviceEnumerator();
-            defaultPlaybackDevice = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            UpdateProcessExecutables();
-            GetAllAudioSessions();
+            RefreshDefaultDevice();
         }
-        catch
+        catch(Exception ex)
         {
+            Debug.WriteLine($"AudioManager Critical Initialization Failed: {ex.Message}");
             throw;
         }
     }
 
-    void UpdateProcessExecutables()
+    string GetProcessNameWithCaching(uint processId)
     {
+        if(processIdToNameCache.TryGetValue(processId, out string cachedName))
+            return cachedName;
+
         try
         {
-            foreach(var process in Process.GetProcesses())
-                try
-                {
-                    if(!processExecutables.ContainsKey((uint)process.Id))
-                        processExecutables[(uint)process.Id] = process.MainModule?.FileName ?? process.ProcessName;
-                }
-                catch { }
+            Process process = Process.GetProcessById((int)processId);
+            string processName = process.ProcessName;
+            processIdToNameCache[processId] = processName;
+            return processName;
         }
-        catch { }
-    }
-
-    public AppAudioSession GetAudioSessionForProcess(uint processId)
-    {
-        try
+        catch(ArgumentException)
         {
-            RefreshDefaultDevice();
-            var sessionManager = defaultPlaybackDevice.AudioSessionManager;
-            var sessionEnumerator = sessionManager.Sessions;
-
-            for(int i = 0; i < sessionEnumerator.Count; i++)
-            {
-                var session = sessionEnumerator[i];
-                if(session.GetProcessID == processId)
-                    return new AppAudioSession(session);
-            }
-
-            return FindSessionByProcessNameMatch(processId, sessionEnumerator);
+            processIdToNameCache.Remove(processId);
+            processIdToPathCache.Remove(processId);
+            return null;
         }
-        catch
+        catch(InvalidOperationException)
         {
+            processIdToNameCache.Remove(processId);
+            processIdToPathCache.Remove(processId);
             return null;
         }
     }
 
-    AppAudioSession FindSessionByProcessNameMatch(uint processId, SessionCollection sessionEnumerator)
+    string GetProcessPathWithCaching(uint processId)
     {
-        string processPath = null;
-        string processName = null;
+        if(processIdToPathCache.TryGetValue(processId, out string cachedPath))
+            return cachedPath;
+
         try
         {
-            if(processExecutables.TryGetValue(processId, out processPath))
-                processName = System.IO.Path.GetFileNameWithoutExtension(processPath);
-            else
+            Process process = Process.GetProcessById((int)processId);
+            string mainModulePath = process.MainModule?.FileName;
+            if(!string.IsNullOrEmpty(mainModulePath))
             {
-                var process = Process.GetProcessById((int)processId);
-                processName = process.ProcessName;
+                processIdToPathCache[processId] = mainModulePath;
+                return mainModulePath;
             }
         }
-        catch { }
-
-        if(string.IsNullOrEmpty(processName))
-            return null;
-
-        for(int i = 0; i < sessionEnumerator.Count; i++)
+        catch(ArgumentException)
         {
-            var session = sessionEnumerator[i];
-            try
-            {
-                uint sessionProcessId = session.GetProcessID;
-                string sessionProcessName = GetProcessNameById((int)sessionProcessId);
-
-                if(sessionProcessName != null && sessionProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase))
-                    return new AppAudioSession(session);
-
-                if(sessionProcessName != null && (sessionProcessName.Contains(processName, StringComparison.OrdinalIgnoreCase) ||
-                   processName.Contains(sessionProcessName, StringComparison.OrdinalIgnoreCase)))
-                    return new AppAudioSession(session);
-            }
-            catch { }
+            processIdToNameCache.Remove(processId);
+            processIdToPathCache.Remove(processId);
         }
-
+        catch(InvalidOperationException)
+        {
+            processIdToNameCache.Remove(processId);
+            processIdToPathCache.Remove(processId);
+        }
+        catch(System.ComponentModel.Win32Exception ex)
+        {
+            Debug.WriteLine($"Win32Exception getting MainModule for PID {processId}: {ex.Message} (NativeErrorCode: {ex.NativeErrorCode})");
+        }
+        catch(NotSupportedException)
+        {
+            Debug.WriteLine($"NotSupportedException getting MainModule for PID {processId}.");
+        }
+        processIdToPathCache[processId] = string.Empty;
         return null;
     }
 
-    string GetProcessNameById(int processId)
+    public AppAudioSession GetAudioSessionForProcess(uint targetProcessId)
     {
+        if(targetProcessId == 0) return null;
+
         try
         {
-            var process = Process.GetProcessById(processId);
-            return process.ProcessName;
+            RefreshDefaultDevice();
+            if(defaultPlaybackDevice == null) return null;
+
+            AudioSessionManager sessionManager = defaultPlaybackDevice.AudioSessionManager;
+            SessionCollection sessionEnumerator = sessionManager.Sessions;
+
+            for(int i = 0; i < sessionEnumerator.Count; i++)
+            {
+                AudioSessionControl session = null;
+                try
+                {
+                    session = sessionEnumerator[i];
+                    if(session.GetProcessID == targetProcessId)
+                    {
+                        string processName = GetProcessNameWithCaching(targetProcessId);
+                        string displayName = session.DisplayName;
+
+                        if(string.IsNullOrEmpty(displayName) && !string.IsNullOrEmpty(processName))
+                        {
+                            string processPath = GetProcessPathWithCaching(targetProcessId);
+                            displayName = !string.IsNullOrEmpty(processPath) ? Path.GetFileNameWithoutExtension(processPath) : processName;
+                        }
+                        else if(string.IsNullOrEmpty(displayName))
+                            displayName = "Unknown App";
+
+                        return new AppAudioSession(session, displayName, targetProcessId);
+                    }
+                }
+                catch(Exception ex)
+                {
+                    Debug.WriteLine($"Error processing session {i} for PID {targetProcessId}: {ex.Message}");
+                }
+                finally
+                {
+                    session?.Dispose();
+                }
+            }
         }
-        catch { }
+        catch(Exception ex)
+        {
+            Debug.WriteLine($"Error in GetAudioSessionForProcess(PID: {targetProcessId}): {ex.Message}");
+            return null;
+        }
         return null;
     }
 
@@ -124,19 +151,51 @@ public class AudioManager : IDisposable
         try
         {
             RefreshDefaultDevice();
-            UpdateProcessExecutables();
-            var sessionManager = defaultPlaybackDevice.AudioSessionManager;
-            var sessionEnumerator = sessionManager.Sessions;
+            if(defaultPlaybackDevice == null) return audioSessions;
+
+            AudioSessionManager sessionManager = defaultPlaybackDevice.AudioSessionManager;
+            SessionCollection sessionEnumerator = sessionManager.Sessions;
 
             for(int i = 0; i < sessionEnumerator.Count; i++)
             {
-                var session = sessionEnumerator[i];
-                if(session.State != AudioSessionState.AudioSessionStateExpired)
-                    try { audioSessions.Add(new AppAudioSession(session)); }
-                    catch { }
+                AudioSessionControl session = null;
+                try
+                {
+                    session = sessionEnumerator[i];
+                    if(session.State == AudioSessionState.AudioSessionStateExpired)
+                        continue;
+
+                    uint processId = session.GetProcessID;
+                    if(processId == 0)
+                        continue;
+
+                    string processName = GetProcessNameWithCaching(processId);
+                    string displayName = session.DisplayName;
+
+                    if(string.IsNullOrEmpty(displayName) && !string.IsNullOrEmpty(processName))
+                    {
+                        string processPath = GetProcessPathWithCaching(processId);
+                        displayName = !string.IsNullOrEmpty(processPath) ? Path.GetFileNameWithoutExtension(processPath) : processName;
+                    }
+                    else if(string.IsNullOrEmpty(displayName))
+                        displayName = $"PID: {processId}";
+
+                    audioSessions.Add(new AppAudioSession(session, displayName, processId));
+                }
+                catch(Exception ex)
+                {
+                    Debug.WriteLine($"Error processing session in GetAllAudioSessions: {ex.Message}");
+                }
+                finally
+                {
+                    session?.Dispose();
+                }
             }
         }
-        catch { }
+        catch(Exception ex)
+        {
+            Debug.WriteLine($"Error in GetAllAudioSessions: {ex.Message}");
+        }
         return audioSessions;
     }
 
@@ -148,31 +207,19 @@ public class AudioManager : IDisposable
             if(processId == 0)
                 return null;
 
-            string processName = GetProcessNameOrDefault((int)processId, "Unknown");
-
             var session = GetAudioSessionForProcess(processId);
             if(session != null) return session;
 
             return TryGetParentWindowSession(hwnd, processId);
         }
-        catch
+        catch(Exception ex)
         {
+            Debug.WriteLine($"Error in GetAudioSessionForWindow: {ex.Message}");
             return null;
         }
     }
 
-    string GetProcessNameOrDefault(int processId, string defaultName)
-    {
-        try
-        {
-            var process = Process.GetProcessById(processId);
-            return process.ProcessName;
-        }
-        catch { }
-        return defaultName;
-    }
-
-    AppAudioSession TryGetParentWindowSession(IntPtr hwnd, uint processId)
+    AppAudioSession TryGetParentWindowSession(IntPtr hwnd, uint childProcessId)
     {
         try
         {
@@ -182,12 +229,13 @@ public class AudioManager : IDisposable
             if(guiInfo.hwndActive == IntPtr.Zero || guiInfo.hwndActive == hwnd) return null;
 
             Native.WindowsInterop.GetWindowThreadProcessId(guiInfo.hwndActive, out uint parentProcessId);
-            if(parentProcessId == 0 || parentProcessId == processId) return null;
+            if(parentProcessId == 0 || parentProcessId == childProcessId) return null;
 
             return GetAudioSessionForProcess(parentProcessId);
         }
-        catch
+        catch(Exception ex)
         {
+            Debug.WriteLine($"Error in TryGetParentWindowSession: {ex.Message}");
             return null;
         }
     }
@@ -197,14 +245,31 @@ public class AudioManager : IDisposable
         try
         {
             defaultPlaybackDevice?.Dispose();
-            defaultPlaybackDevice = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            defaultPlaybackDevice = deviceEnumerator?.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         }
-        catch { }
+        catch(Exception ex)
+        {
+            Debug.WriteLine($"Failed to refresh default audio device: {ex.Message}");
+            defaultPlaybackDevice = null;
+        }
     }
 
     public void Dispose()
     {
-        defaultPlaybackDevice?.Dispose();
-        deviceEnumerator?.Dispose();
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if(disposing)
+        {
+            defaultPlaybackDevice?.Dispose();
+            defaultPlaybackDevice = null;
+            deviceEnumerator?.Dispose();
+            deviceEnumerator = null;
+            processIdToNameCache.Clear();
+            processIdToPathCache.Clear();
+        }
     }
 }

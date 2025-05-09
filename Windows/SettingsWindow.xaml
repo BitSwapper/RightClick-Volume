@@ -5,12 +5,14 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:RightClickVolume"
         mc:Ignorable="d"
-        Title="Settings - RightClick Volume" Height="550" Width="500"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize" ShowInTaskbar="False">
+        Title="Settings - RightClick Volume" Height="580" Width="500"
+    WindowStartupLocation="CenterScreen" ResizeMode="NoResize" ShowInTaskbar="False">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <!-- Startup -->
+            <RowDefinition Height="Auto"/>
+            <!-- UI Settings (New Row for Peak Volume Bar) -->
             <RowDefinition Height="Auto"/>
             <!-- Hotkey -->
             <RowDefinition Height="*"/>
@@ -19,12 +21,12 @@
             <!-- Buttons -->
         </Grid.RowDefinitions>
 
-        <!-- Launch on Startup -->
-        <CheckBox x:Name="LaunchOnStartupCheckBox" Grid.Row="0" Margin="5"
-                  Content="Launch application when Windows starts"/>
+        <CheckBox x:Name="LaunchOnStartupCheckBox" Grid.Row="0" Margin="5" Content="Launch application when Windows starts"/>
+
+        <CheckBox x:Name="ShowPeakVolumeBarCheckBox" Grid.Row="1" Margin="5" Content="Show peak volume meter"/>
 
         <!-- Hotkey Settings -->
-        <GroupBox Header="Activation Hotkey (Modifiers + Right Mouse Click)" Grid.Row="1" Margin="5">
+        <GroupBox Header="Activation Hotkey (Modifiers + Right Mouse Click)" Grid.Row="2" Margin="5">
             <StackPanel Margin="5">
                 <TextBlock Text="Select the modifier keys required:" Margin="0,0,0,5"/>
                 <CheckBox x:Name="HotkeyCtrlCheckBox" Content="Ctrl" Margin="5,2"/>
@@ -37,7 +39,7 @@
         </GroupBox>
 
         <!-- Manual Mappings -->
-        <GroupBox Header="Manual UIA Name -> Process Mappings" Grid.Row="2" Margin="5">
+        <GroupBox Header="Manual UIA Name -> Process Mappings" Grid.Row="3" Margin="5">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
@@ -46,7 +48,6 @@
                 <ListView x:Name="MappingsListView" Grid.Row="0" Margin="5" ItemsSource="{Binding Mappings}" SelectionMode="Single">
                     <ListView.View>
                         <GridView>
-                            <!-- Adjust Widths slightly if needed due to added GroupBox -->
                             <GridViewColumn Header="UIA Name (Key)" Width="190" DisplayMemberBinding="{Binding UiaName}"/>
                             <GridViewColumn Header="Target Process List" Width="230" DisplayMemberBinding="{Binding ProcessNameList}"/>
                         </GridView>
@@ -60,7 +61,7 @@
         </GroupBox>
 
         <!-- Save/Close Buttons -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="5">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="5">
             <Button Content="Save and Close" Width="100" Margin="5,0" Click="SaveButton_Click" IsDefault="True"/>
             <Button Content="Cancel" Width="80" Margin="5,0" Click="CancelButton_Click" IsCancel="True"/>
         </StackPanel>

@@ -25,7 +25,7 @@ namespace RightClickVolume.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool LaunchOnStartup {
             get {
                 return ((bool)(this["LaunchOnStartup"]));
@@ -103,6 +103,18 @@ namespace RightClickVolume.Properties {
             }
             set {
                 this["IsFirstRunEver"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool ShowPeakVolumeBar {
+            get {
+                return ((bool)(this["ShowPeakVolumeBar"]));
+            }
+            set {
+                this["ShowPeakVolumeBar"] = value;
             }
         }
     }

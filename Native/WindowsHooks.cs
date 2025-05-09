@@ -9,17 +9,17 @@ public class WindowsHooks
     #region Win32 API Declarations
 
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+    static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
 
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+    static extern bool UnhookWindowsHookEx(IntPtr hhk);
 
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+    static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string lpModuleName);
+    static extern IntPtr GetModuleHandle(string lpModuleName);
 
     [DllImport("user32.dll")]
     public static extern IntPtr WindowFromPoint(POINT point);
@@ -27,18 +27,18 @@ public class WindowsHooks
     [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
-    private const int WH_MOUSE_LL = 14;
-    private const int WM_RBUTTONDOWN = 0x0204;
-    private const int WM_RBUTTONUP = 0x0205;
+    const int WH_MOUSE_LL = 14;
+    const int WM_RBUTTONDOWN = 0x0204;
+    const int WM_RBUTTONUP = 0x0205;
 
-    private delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
+    delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     #endregion
 
     #region Hook Implementation
 
-    private IntPtr mouseHookHandle = IntPtr.Zero;
-    private HookProc mouseProc;
+    IntPtr mouseHookHandle = IntPtr.Zero;
+    HookProc mouseProc;
     public event EventHandler<MouseHookEventArgs> RightMouseClick;
 
     public WindowsHooks() => mouseProc = MouseHookCallback;
@@ -71,7 +71,7 @@ public class WindowsHooks
     }
 
 
-    private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if(nCode >= 0)
         {
@@ -99,7 +99,7 @@ public class WindowsHooks
     #region Native Structures
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct MSLLHOOKSTRUCT
+    struct MSLLHOOKSTRUCT
     {
         public POINT pt;
         public uint mouseData;

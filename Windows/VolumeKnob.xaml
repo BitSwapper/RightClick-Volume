@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:RightClickVolume"
+        xmlns:p="clr-namespace:RightClickVolume.Properties"
         mc:Ignorable="d"
         Title="Volume Knob"
         Width="70" Height="300"
@@ -11,21 +12,18 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
+        BorderThickness="0"
         Topmost="True"
         AllowsTransparency="True"
         Background="Transparent"
         Focusable="True"
-        WindowStartupLocation="Manual">
+        WindowStartupLocation="Manual"
+        MouseWheel="VolumeKnob_MouseWheel">
 
-    <!-- ========================== -->
-    <!--      RESOURCES START       -->
-    <!-- ========================== -->
     <Window.Resources>
-
-        <!-- Converter (Ensure ValueToHeightConverter exists in the 'local' namespace) -->
+        <local:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <local:ValueToHeightConverter x:Key="ValueToHeightConverter"/>
 
-        <!-- Base Button Style -->
         <Style x:Key="ModernButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="24"/>
             <Setter Property="Height" Value="24"/>
@@ -62,12 +60,9 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <!-- Mute Button Style -->
         <Style x:Key="MuteButtonStyle" TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
             <Setter Property="FontFamily" Value="Segoe UI Emoji"/>
             <Setter Property="FontSize" Value="10"/>
-            <!-- Background/Foreground set dynamically in code-behind -->
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#5A5A5A"/>
@@ -79,8 +74,6 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-
-        <!-- Slider Thumb Style -->
         <Style x:Key="VolumeSliderThumbStyle" TargetType="{x:Type Thumb}">
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="OverridesDefaultStyle" Value="True"/>
@@ -122,8 +115,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <!-- Empty RepeatButton Style for Slider Track -->
         <Style x:Key="SliderButtonStyle" TargetType="RepeatButton">
             <Setter Property="Template">
                 <Setter.Value>
@@ -133,8 +124,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <!-- Volume Slider Style -->
         <Style x:Key="VolumeSliderStyle" TargetType="{x:Type Slider}">
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="OverridesDefaultStyle" Value="True"/>
@@ -142,7 +131,6 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Slider}">
                         <Grid>
-                            <!-- Track Background -->
                             <Border x:Name="TrackBackground" Width="8" CornerRadius="4" HorizontalAlignment="Center" VerticalAlignment="Stretch">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0.5, 0" EndPoint="0.5, 0.7">
@@ -151,8 +139,6 @@
                                     </LinearGradientBrush>
                                 </Border.Background>
                             </Border>
-
-                            <!-- Filled part of Track -->
                             <Border x:Name="PART_SelectionRange" Width="8" CornerRadius="4" HorizontalAlignment="Center" VerticalAlignment="Bottom">
                                 <Border.Height>
                                     <MultiBinding Converter="{StaticResource ValueToHeightConverter}">
@@ -167,8 +153,6 @@
                                     </LinearGradientBrush>
                                 </Border.Background>
                             </Border>
-
-                            <!-- Track Control (hosts Thumb) -->
                             <Track x:Name="PART_Track" Orientation="Vertical">
                                 <Track.Thumb>
                                     <Thumb x:Name="Thumb" Style="{StaticResource VolumeSliderThumbStyle}" />
@@ -188,9 +172,6 @@
                                 <Setter TargetName="Thumb" Property="Opacity" Value="0.4"/>
                                 <Setter TargetName="TrackBackground" Property="Opacity" Value="0.6"/>
                             </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <!-- Optional hover effect -->
-                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -198,47 +179,27 @@
         </Style>
 
     </Window.Resources>
-    <!-- ========================== -->
-    <!--       RESOURCES END        -->
-    <!-- ========================== -->
 
-
-    <!-- ============================================================ -->
-    <!--  !!! THIS BORDER IS THE **ONLY** DIRECT CHILD OF WINDOW !!!  -->
-    <!--  It is implicitly assigned to the Window.Content property    -->
-    <!-- ============================================================ -->
-    <!-- ============================================================ -->
-    <!--  !!! THIS BORDER IS THE **ONLY** DIRECT CHILD OF WINDOW !!!  -->
-    <!-- ============================================================ -->
-    <Border CornerRadius="10" BorderThickness="0">
+    <Border CornerRadius="10" BorderThickness="0"
+            MouseLeftButtonDown="Window_MouseLeftButtonDown_Drag">
+        <!-- Changed name for clarity -->
         <Border.Background>
-            <!-- Replaced LinearGradientBrush with RadialGradientBrush -->
             <RadialGradientBrush GradientOrigin="0.5, 0.5" Center="0.5,0.5" RadiusX="1" RadiusY="2">
                 <GradientStop Color="#FF444444" Offset="0.0" />
-                <!-- Slightly lighter grey at the origin (top-center) -->
                 <GradientStop Color="#BB2A2A2A" Offset="1.0" />
-                <!-- Darker grey towards the edges -->
             </RadialGradientBrush>
         </Border.Background>
         <Border.Effect>
-            <!-- Existing DropShadowEffect -->
             <DropShadowEffect ShadowDepth="3" Direction="315" Color="Black" Opacity="0.4" BlurRadius="8"/>
         </Border.Effect>
 
-        <!-- Main Content Grid (everything visual goes inside this Grid) -->
         <Grid Margin="6">
-            <!-- ... (rest of the Grid content remains the same) ... -->
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <!-- Row 0: Buttons -->
                 <RowDefinition Height="Auto" />
-                <!-- Row 1: Current Volume Text -->
-                <RowDefinition Height="33*"    />
-                <RowDefinition Height="146*"/>
-                <!-- Row 2: Slider -->
+                <RowDefinition Height="33*"  />
+                <RowDefinition Height="146*" />
                 <RowDefinition Height="Auto" />
-
-                <!-- Row 3: App Name -->
             </Grid.RowDefinitions>
 
             <!-- Row 0: Buttons -->
@@ -252,16 +213,41 @@
             </Grid>
 
             <!-- Row 1: Current Volume Text -->
-            <TextBlock x:Name="TextCurVol" Grid.Row="1" Text="{Binding CurVol, FallbackValue=50, TargetNullValue=--}" Foreground="#EFEFEF" FontWeight="DemiBold" FontSize="20" TextAlignment="Center" Margin="0,0,0,5"/>
+            <TextBlock x:Name="TextCurVol" Grid.Row="1" Text="{Binding CurVol, FallbackValue=50, TargetNullValue=--}" Foreground="#EFEFEF" FontWeight="DemiBold" FontSize="20" TextAlignment="Center" Margin="0,0,0,5"
+                       MouseLeftButtonDown="Window_MouseLeftButtonDown_Drag"/>
 
-            <!-- Row 2: Volume Slider -->
-            <Slider x:Name="VolumeSlider" Grid.Row="2" Orientation="Vertical" Minimum="0" Maximum="100" Value="{Binding Volume, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" Margin="0,8,0,8" IsDirectionReversed="False" ValueChanged="VolumeSlider_ValueChanged" Style="{StaticResource VolumeSliderStyle}" Grid.RowSpan="2"/>
+            <!-- Row 2 & 3 (spanned): Volume Slider and Peak Meter -->
+            <Grid Grid.Row="2" Grid.RowSpan="2"
+                        HorizontalAlignment="Center" VerticalAlignment="Stretch" Margin="0,8,0,8">
 
-            <!-- Row 3: App Name Text -->
-            <TextBlock x:Name="AppNameTextBlock" Grid.Row="4" Text="{Binding AppName, FallbackValue=Application Name, TargetNullValue=Unknown App}" Foreground="#DDDDDD" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" FontSize="11" Margin="0,8,0,0"/>
+                <Slider x:Name="VolumeSlider"
+                        Orientation="Vertical"
+                        Minimum="0" Maximum="100"
+                        Value="{Binding Volume, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsDirectionReversed="False"
+                        ValueChanged="VolumeSlider_ValueChanged"
+                        Style="{StaticResource VolumeSliderStyle}"
+                        VerticalAlignment="Stretch"
+                        Panel.ZIndex="1"
+                        Margin="0,0,0,0"/>
+
+                <ProgressBar x:Name="PeakVolumeMeter"
+                             BorderThickness="0"
+                             Orientation="Vertical"
+                             Foreground="#7F0A9A34"
+                             Background="Transparent"             
+                             Width="10"
+                             Minimum="0" Maximum="100"
+                             Value="{Binding PeakLevel, Mode=OneWay, FallbackValue=0}"
+                             VerticalAlignment="Stretch"
+                             Margin="5, 2, 0, 1"
+                             IsEnabled="{Binding Path=IsEnabled, ElementName=VolumeSlider}"
+                             Visibility="{Binding Source={x:Static p:Settings.Default}, Path=ShowPeakVolumeBar, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"/>
+            </Grid>
+
+            <!-- Row 4: App Name Text -->
+            <TextBlock x:Name="AppNameTextBlock" Grid.Row="4" Text="{Binding AppName, FallbackValue=Application Name, TargetNullValue=Unknown App}" Foreground="#DDDDDD" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" FontSize="11" Margin="0,8,0,0"
+                       MouseLeftButtonDown="Window_MouseLeftButtonDown_Drag"/>
         </Grid>
-        <!-- End Main Content Grid -->
-
     </Border>
-    <!-- End Main Container Border -->
 </Window>

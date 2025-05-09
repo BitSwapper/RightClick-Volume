@@ -4,8 +4,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using Hardcodet.Wpf.TaskbarNotification;
-using RightClickVolume.Properties;
 using RightClickVolume.Managers;
+using RightClickVolume.Properties;
 
 
 namespace RightClickVolume;
@@ -119,7 +119,7 @@ public partial class App : Application
 
     void SettingsMenuItem_Click(object sender, RoutedEventArgs e) => OpenSettingsWindow();
 
-    private void OpenLink(object sender, RoutedEventArgs e)
+    void OpenLink(object sender, RoutedEventArgs e)
     {
         string url = "https://github.com/BitSwapper";
 
