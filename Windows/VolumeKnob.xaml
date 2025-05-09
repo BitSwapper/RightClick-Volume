@@ -11,6 +11,7 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
+        BorderThickness="0"
         Topmost="True"
         AllowsTransparency="True"
         Background="Transparent"
@@ -24,6 +25,7 @@
 
         <!-- Converter (Ensure ValueToHeightConverter exists in the 'local' namespace) -->
         <local:ValueToHeightConverter x:Key="ValueToHeightConverter"/>
+        
 
         <!-- Base Button Style -->
         <Style x:Key="ModernButtonStyle" TargetType="Button">
@@ -293,7 +295,7 @@
             <TextBlock x:Name="TextCurVol" Grid.Row="1" Text="{Binding CurVol, FallbackValue=50, TargetNullValue=--}" Foreground="#EFEFEF" FontWeight="DemiBold" FontSize="20" TextAlignment="Center" Margin="0,0,0,5"/>
 
             <!-- Row 2 & 3 (spanned): Volume Slider and Peak Meter -->
-            <StackPanel Grid.Row="2" Grid.RowSpan="2" Orientation="Horizontal"
+            <Grid Grid.Row="2" Grid.RowSpan="2"
                         HorizontalAlignment="Center" VerticalAlignment="Stretch" Margin="0,8,0,8">
 
                 <!-- Volume Control Slider -->
@@ -305,18 +307,23 @@
                     ValueChanged="VolumeSlider_ValueChanged"
                         Style="{StaticResource VolumeSliderStyle}"
                         VerticalAlignment="Stretch"
-                        Margin="0,0,5,0"/>
+                        Panel.ZIndex="1"
+                        Margin="0,0,0,0"/>
                     <!-- Margin to space it from peak meter -->
 
                     <!-- Peak Volume Meter -->
                 <ProgressBar x:Name="PeakVolumeMeter"
+                             BorderThickness="0"
              Orientation="Vertical"
+             Foreground="#7F0A9A34"
+             Background="Transparent"             
              Width="10"
              Minimum="0" Maximum="100"
              Value="{Binding PeakLevel, Mode=OneWay, FallbackValue=0}"
              VerticalAlignment="Stretch"
              IsEnabled="{Binding Path=IsEnabled, ElementName=VolumeSlider}"/>
-            </StackPanel>
+                
+            </Grid>
 
             <!-- Row 4 (was Row 3): App Name Text -->
             <TextBlock x:Name="AppNameTextBlock" Grid.Row="4" Text="{Binding AppName, FallbackValue=Application Name, TargetNullValue=Unknown App}" Foreground="#DDDDDD" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" FontSize="11" Margin="0,8,0,0"/>
