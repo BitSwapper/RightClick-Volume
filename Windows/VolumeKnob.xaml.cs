@@ -28,11 +28,8 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
     private const float PeakAttackFactor = 0.9f;
     private const float PeakDecayFactor = 0.80f;
-
     private const float BasePeakMeterScaleFactor = 140.0f;
-
     private const double PeakCurvePower = 0.65;
-
     private const int PeakMeterTimerInterval = 3;
 
     static readonly SolidColorBrush BG_Muted = new SolidColorBrush(Color.FromRgb(0x80, 0x30, 0x30));
@@ -47,6 +44,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     const string IconMuted = "🔇";
     const string IconUnMuted = "🔊";
 
+    const float MOUSE_WHEEL_VOLUME_STEP = 5.0f;
 
     public event PropertyChangedEventHandler PropertyChanged;
 
@@ -55,15 +53,22 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
         get => volume;
         set
         {
-            if(System.Math.Abs(volume - value) < 0.001f) return;
-            volume = value;
+            if(System.Math.Abs(volume - value) < 0.001f && volume == value) return;
+
+            float newVolumeClamped = Math.Clamp(value, 0f, 100f);
+            if(System.Math.Abs(volume - newVolumeClamped) < 0.001f && volume == newVolumeClamped) return;
+
+            volume = newVolumeClamped;
             OnPropertyChanged(nameof(Volume));
             CurVol = volume.ToString(FORMAT_VolumeDisplay);
+
             if(!isUpdatingFromCode && session != null)
             {
-                if(session.IsMuted)
+                if(session.IsMuted && volume > 0.001f)
                 {
-                    session.SetMute(!session.IsMuted);
+                    session.SetMute(false);
+                    UpdateMuteStateVisuals();
+                    UpdatePeakMeterTimerState();
                 }
                 session.SetVolume(volume / VolumeScaleFactor);
             }
@@ -124,7 +129,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             Interval = TimeSpan.FromMilliseconds(PeakMeterTimerInterval)
         };
         peakMeterTimer.Tick += PeakMeterTimer_Tick;
-
         Settings.Default.PropertyChanged += Settings_PropertyChanged;
     }
 
@@ -139,12 +143,10 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     private void UpdatePeakMeterTimerState()
     {
         if(peakMeterTimer == null) return;
-
         bool shouldTimerRun = Settings.Default.ShowPeakVolumeBar &&
                               this.IsVisible &&
                               session != null &&
                               !session.IsMuted;
-
         if(shouldTimerRun)
         {
             if(!peakMeterTimer.IsEnabled)
@@ -176,28 +178,22 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             throw new ArgumentNullException(nameof(session));
         }
         this.session = session;
-
         isUpdatingFromCode = true;
         AppName = session.DisplayName;
         Volume = session.Volume * VolumeScaleFactor;
         isUpdatingFromCode = false;
-
         UpdateMuteStateVisuals();
-
         this.Left = left;
         this.Top = top;
-
         try
         {
             this.Show();
             this.Activate();
-
             Task.Run(async () =>
             {
                 await Task.Delay(TOPMOST_RESET_INITIAL_DELAY); Dispatcher.Invoke(ResetTopmostState);
                 await Task.Delay(TOPMOST_RESET_SECONDARY_DELAY); Dispatcher.Invoke(() => { ResetTopmostState(); this.Activate(); });
             });
-
             PeakLevel = 0;
             UpdatePeakMeterTimerState();
         }
@@ -215,6 +211,44 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             this.Topmost = false;
             this.Topmost = true;
         }
+    }
+
+    private void Window_MouseLeftButtonDown_Drag(object sender, MouseButtonEventArgs e)
+    {
+        if(e.ButtonState == MouseButtonState.Pressed)
+        {
+            if(e.Source is System.Windows.Controls.Button || e.Source is Thumb)
+            {
+                return;
+            }
+
+            try
+            {
+                this.DragMove();
+            }
+            catch(InvalidOperationException ex)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] DragMove() failed: {ex.Message}");
+            }
+        }
+    }
+
+    private void VolumeKnob_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if(!isWindowInitializationComplete || session == null || !VolumeSlider.IsEnabled)
+            return;
+
+        float newVolume = Volume;
+        if(e.Delta > 0)
+        {
+            newVolume += MOUSE_WHEEL_VOLUME_STEP;
+        }
+        else if(e.Delta < 0)
+        {
+            newVolume -= MOUSE_WHEEL_VOLUME_STEP;
+        }
+        Volume = newVolume;
+        e.Handled = true;
     }
 
     void VolumeKnob_KeyDown(object sender, KeyEventArgs e)
@@ -249,14 +283,12 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     void VolumeKnob_Closed(object sender, EventArgs e)
     {
         Settings.Default.PropertyChanged -= Settings_PropertyChanged;
-
         if(peakMeterTimer != null)
         {
             peakMeterTimer.Stop();
             peakMeterTimer.Tick -= PeakMeterTimer_Tick;
         }
         PeakLevel = 0;
-
         this.isWindowInitializationComplete = false;
         DetachSliderEvents();
         session = null;
@@ -301,10 +333,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if(!this.isWindowInitializationComplete) return;
-
-        if(!isUpdatingFromCode && session != null)
-        {
-        }
     }
 
     void MuteButton_Click(object sender, RoutedEventArgs e)
@@ -314,7 +342,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             session.SetMute(!session.IsMuted);
             UpdateMuteStateVisuals();
             UpdatePeakMeterTimerState();
-
             if(session.IsMuted)
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] MuteButton_Click: Session '{session.DisplayName}' MUTED.");
@@ -338,7 +365,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             MuteButton.Background = isMuted ? BG_Muted : BG_UnMuted;
             MuteButton.Foreground = isMuted ? FG_Muted : FG_UnMuted;
             VolumeSlider.IsEnabled = !isMuted;
-
         }
         catch(Exception ex)
         {
@@ -393,13 +419,20 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
     private void PeakMeterTimer_Tick(object sender, EventArgs e)
     {
-
         if(session != null)
         {
             float rawPeak = 0f;
             try
             {
                 rawPeak = session.CurrentPeakValue;
+            }
+            catch(ObjectDisposedException)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTimer_Tick: Session '{session.DisplayName}' disposed. Stopping timer.");
+                PeakLevel = 0;
+                if(peakMeterTimer.IsEnabled) peakMeterTimer.Stop();
+                session = null;
+                return;
             }
             catch(Exception ex)
             {

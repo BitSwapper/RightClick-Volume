@@ -27,7 +27,7 @@
 
         <!-- Show Peak Volume Bar CheckBox -->
         <CheckBox x:Name="ShowPeakVolumeBarCheckBox" Grid.Row="1" Margin="5"
-                  Content="Show peak volume meter bar in volume control window"/>
+                  Content="Show peak volume meter"/>
 
         <!-- Hotkey Settings -->
         <GroupBox Header="Activation Hotkey (Modifiers + Right Mouse Click)" Grid.Row="2" Margin="5">
