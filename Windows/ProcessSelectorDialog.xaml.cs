@@ -16,7 +16,7 @@ public partial class ProcessSelectorDialog : Window
         LoadProcesses();
     }
 
-    private void LoadProcesses()
+    void LoadProcesses()
     {
         try
         {
@@ -29,7 +29,7 @@ public partial class ProcessSelectorDialog : Window
         }
     }
 
-    private void SelectProcessAndClose()
+    void SelectProcessAndClose()
     {
         var selectedItem = ProcessListView.SelectedItem as Process;
         if(selectedItem != null)
@@ -41,9 +41,9 @@ public partial class ProcessSelectorDialog : Window
             MessageBox.Show("Please select a process from the list.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void SelectButton_Click(object sender, RoutedEventArgs e) => SelectProcessAndClose();
+    void SelectButton_Click(object sender, RoutedEventArgs e) => SelectProcessAndClose();
 
-    private void ProcessListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    void ProcessListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if(ProcessListView.SelectedItem != null)
             SelectProcessAndClose();

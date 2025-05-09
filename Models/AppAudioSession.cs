@@ -1,23 +1,26 @@
 ﻿using System;
 using System.Diagnostics;
+using NAudio.CoreAudioApi;
 
 namespace RightClickVolume.Models;
 
 public class AppAudioSession
 {
-    NAudio.CoreAudioApi.AudioSessionControl sessionControl;
-    NAudio.CoreAudioApi.SimpleAudioVolume volumeControl;
+    readonly AudioSessionControl _sessionControl;
+    readonly SimpleAudioVolume _volumeControl;
+    readonly AudioMeterInformation _meterInformation;
 
     public uint ProcessId { get; private set; }
     public string ProcessName { get; private set; }
     public string DisplayName { get; private set; }
+
     public float Volume
     {
         get
         {
             try
             {
-                return volumeControl?.Volume ?? 0f;
+                return _volumeControl?.Volume ?? 0f;
             }
             catch
             {
@@ -32,7 +35,7 @@ public class AppAudioSession
         {
             try
             {
-                return volumeControl?.Mute ?? false;
+                return _volumeControl?.Mute ?? false;
             }
             catch
             {
@@ -41,23 +44,66 @@ public class AppAudioSession
         }
     }
 
-    public AppAudioSession(NAudio.CoreAudioApi.AudioSessionControl sessionControl)
+    public float CurrentPeakValue
     {
-        this.sessionControl = sessionControl;
-        volumeControl = sessionControl.SimpleAudioVolume;
+        get
+        {
+            try
+            {
+                float peak = _meterInformation?.MasterPeakValue ?? 0f;
+                if(ProcessId != 0)
+                {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] AppAudioSession (PID: {ProcessId}, Name: {DisplayName}): Get CurrentPeakValue -> Raw MasterPeakValue = {peak:F5}");
+                }
+                return peak;
+            }
+            catch(Exception ex)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] AppAudioSession (PID: {ProcessId}, Name: {DisplayName}): ERROR in CurrentPeakValue getter: {ex.Message}");
+                return 0f;
+            }
+        }
+    }
+
+    public AppAudioSession(AudioSessionControl sessionControl)
+    {
+        if(sessionControl == null)
+            throw new ArgumentNullException(nameof(sessionControl));
+
+        _sessionControl = sessionControl;
+        _volumeControl = sessionControl.SimpleAudioVolume;
+        _meterInformation = sessionControl.AudioMeterInformation;
 
         ProcessId = sessionControl.GetProcessID;
 
         try
         {
-            var process = Process.GetProcessById((int)ProcessId);
-            ProcessName = process.ProcessName;
-            DisplayName = string.IsNullOrEmpty(this.sessionControl.DisplayName) ? ProcessName : this.sessionControl.DisplayName;
+            if(ProcessId == 0)
+            {
+                ProcessName = "System Sounds";
+                DisplayName = !string.IsNullOrEmpty(_sessionControl.DisplayName) ? _sessionControl.DisplayName : ProcessName;
+            }
+            else
+            {
+                using var process = Process.GetProcessById((int)ProcessId);
+                ProcessName = process.ProcessName;
+                DisplayName = string.IsNullOrEmpty(_sessionControl.DisplayName) ? ProcessName : _sessionControl.DisplayName;
+            }
         }
-        catch
+        catch(ArgumentException)
+        {
+            ProcessName = "Unknown (Exited)";
+            DisplayName = !string.IsNullOrEmpty(_sessionControl.DisplayName) ? _sessionControl.DisplayName : "Unknown Application";
+        }
+        catch(InvalidOperationException)
+        {
+            ProcessName = "Unknown (Access Denied/Exited)";
+            DisplayName = !string.IsNullOrEmpty(_sessionControl.DisplayName) ? _sessionControl.DisplayName : "Unknown Application";
+        }
+        catch(Exception ex)
         {
             ProcessName = "Unknown";
-            DisplayName = "Unknown Application";
+            DisplayName = !string.IsNullOrEmpty(_sessionControl.DisplayName) ? _sessionControl.DisplayName : "Unknown Application";
         }
     }
 
@@ -65,18 +111,27 @@ public class AppAudioSession
     {
         try
         {
-            volume = Math.Clamp(volume, 0f, 1f);
-            volumeControl.Volume = volume;
+            if(_volumeControl != null)
+            {
+                _volumeControl.Volume = Math.Clamp(volume, 0f, 1f);
+            }
         }
-        catch { }
+        catch(Exception ex)
+        {
+        }
     }
 
     public void SetMute(bool mute)
     {
         try
         {
-            volumeControl.Mute = mute;
+            if(_volumeControl != null)
+            {
+                _volumeControl.Mute = mute;
+            }
         }
-        catch { }
+        catch(Exception ex)
+        {
+        }
     }
 }
