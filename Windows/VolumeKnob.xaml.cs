@@ -18,6 +18,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     bool isUpdatingFromCode;
     bool isDraggingSlider = false;
     Thumb sliderThumb;
+    bool isWindowInitializationComplete = false;
 
     static readonly SolidColorBrush BG_Muted = new SolidColorBrush(Color.FromRgb(0x80, 0x30, 0x30));
     static readonly SolidColorBrush FG_Muted = Brushes.White;
@@ -38,7 +39,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
         get => volume;
         set
         {
-            if(volume == value) return;
+            if(System.Math.Abs(volume - value) < 0.001f) return;
             volume = value;
             OnPropertyChanged(nameof(Volume));
 
@@ -81,6 +82,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     public VolumeKnob()
     {
         InitializeComponent();
+        isWindowInitializationComplete = false;
         DataContext = this;
 
         this.Deactivated += VolumeKnob_Deactivated;
@@ -160,10 +162,15 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             ResetTopmostState();
     }
 
-    void VolumeKnob_Loaded(object sender, RoutedEventArgs e) => AttachSliderEvents();
+    void VolumeKnob_Loaded(object sender, RoutedEventArgs e)
+    {
+        AttachSliderEvents();
+        this.isWindowInitializationComplete = true;
+    }
 
     void VolumeKnob_Closed(object sender, EventArgs e)
     {
+        this.isWindowInitializationComplete = false;
         DetachSliderEvents();
         session = null;
         this.Deactivated -= VolumeKnob_Deactivated;
@@ -208,6 +215,11 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
     void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        if(!this.isWindowInitializationComplete)
+        {
+            return;
+        }
+
         if(!isUpdatingFromCode && session != null)
         {
             float newVolume = (float)e.NewValue / VolumeScaleFactor;
