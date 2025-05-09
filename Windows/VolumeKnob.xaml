@@ -199,56 +199,6 @@
             </Setter>
         </Style>
 
-        <!-- Style for the Peak Volume Meter (ProgressBar) -->
-        <Style x:Key="PeakMeterStyle" TargetType="ProgressBar">
-            <Setter Property="Orientation" Value="Vertical"/>
-            <Setter Property="Width" Value="10"/>
-            <!-- Adjust width as needed -->
-            <Setter Property="Background" Value="#FF383838"/>
-            <!-- Background of the meter track -->
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground">
-                <!-- This is the fill of the progress bar -->
-                <Setter.Value>
-                    <LinearGradientBrush StartPoint="0.5,1" EndPoint="0.5,0">
-                        <!-- Fills from bottom (green) to top (red) -->
-                        <GradientStop Color="GreenYellow" Offset="0.0" />
-                        <GradientStop Color="#A2FF00" Offset="0.4" />
-                        <!-- Brighter Green -->
-                        <GradientStop Color="Yellow" Offset="0.75" />
-                        <GradientStop Color="OrangeRed" Offset="0.9" />
-                        <GradientStop Color="Red" Offset="1.0" />
-                    </LinearGradientBrush>
-                </Setter.Value>
-            </Setter>
-            <!-- Optional: Apply a simple template for rounded corners if default isn't sufficient -->
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ProgressBar">
-                        <Border x:Name="TemplateRoot"
-                                CornerRadius="4"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}">
-                            <Grid>
-                                <Rectangle x:Name="PART_Track" />
-                                <Rectangle x:Name="PART_Indicator"
-                                           Fill="{TemplateBinding Foreground}"
-                                           HorizontalAlignment="Stretch"
-                                           VerticalAlignment="Bottom" />
-                                <!-- WPF's ProgressBar logic for Orientation="Vertical" 
-                                     will adjust PART_Indicator's Height based on Value -->
-                            </Grid>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Opacity" Value="0.4"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
 
     </Window.Resources>
     <!-- ========================== -->
@@ -270,13 +220,9 @@
         <Grid Margin="6">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <!-- Row 0: Buttons -->
                 <RowDefinition Height="Auto" />
-                <!-- Row 1: Current Volume Text -->
                 <RowDefinition Height="33*"  />
-                <!-- Row 2: Slider Area (Part 1) -->
                 <RowDefinition Height="146*" />
-                <!-- Row 2: Slider Area (Part 2) -->
                 <RowDefinition Height="Auto" />
                 <!-- Row 3: App Name -->
             </Grid.RowDefinitions>
@@ -309,11 +255,10 @@
                         VerticalAlignment="Stretch"
                         Panel.ZIndex="1"
                         Margin="0,0,0,0"/>
-                    <!-- Margin to space it from peak meter -->
 
                     <!-- Peak Volume Meter -->
                 <ProgressBar x:Name="PeakVolumeMeter"
-                             BorderThickness="0"
+             BorderThickness="0"
              Orientation="Vertical"
              Foreground="#7F0A9A34"
              Background="Transparent"             
@@ -321,8 +266,9 @@
              Minimum="0" Maximum="100"
              Value="{Binding PeakLevel, Mode=OneWay, FallbackValue=0}"
              VerticalAlignment="Stretch"
+             Margin="5, 2, 0, 1"
              IsEnabled="{Binding Path=IsEnabled, ElementName=VolumeSlider}"/>
-                
+             
             </Grid>
 
             <!-- Row 4 (was Row 3): App Name Text -->

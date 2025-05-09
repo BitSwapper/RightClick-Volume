@@ -25,11 +25,14 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     DispatcherTimer peakMeterTimer;
     float _peakLevel;
 
-    private const float PeakAttackFactor = 0.75f;
-    private const float PeakDecayFactor = .40f;
+    private const float PeakAttackFactor = 0.9f;  
+    private const float PeakDecayFactor = 0.80f;   
 
-    private const float BasePeakMeterScaleFactor = 150.0f;
-    private const double PeakCurvePower = 0.75;
+    private const float BasePeakMeterScaleFactor = 140.0f;  
+
+    private const double PeakCurvePower = 0.65;  
+
+    private const int PeakMeterTimerInterval = 3;  
 
     static readonly SolidColorBrush BG_Muted = new SolidColorBrush(Color.FromRgb(0x80, 0x30, 0x30));
     static readonly SolidColorBrush FG_Muted = Brushes.White;
@@ -94,7 +97,8 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
         get => _peakLevel;
         set
         {
-            if(Math.Abs(_peakLevel - value) > 0.001f)
+            // Increased sensitivity to small changes by reducing threshold
+            if(Math.Abs(_peakLevel - value) > 0.0005f)
             {
                 _peakLevel = value;
                 OnPropertyChanged(nameof(PeakLevel));
@@ -118,7 +122,8 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
         peakMeterTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(5)
+            // Faster timer interval for more responsive updates
+            Interval = TimeSpan.FromMilliseconds(PeakMeterTimerInterval)
         };
         peakMeterTimer.Tick += PeakMeterTimer_Tick;
     }
@@ -340,6 +345,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             }
         }
     }
+
     private void PeakMeterTimer_Tick(object sender, EventArgs e)
     {
         if(session != null && this.IsVisible)
@@ -356,6 +362,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
                 return;
             }
 
+            // Use a less aggressive curve for better response to subtle sounds
             float curvedPeak = (float)Math.Pow(Math.Max(0, rawPeak), PeakCurvePower);
 
             float scaledPeak = curvedPeak * BasePeakMeterScaleFactor;
@@ -373,14 +380,29 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             float newSmoothedDisplayValue;
             float smoothingFactorToUse;
 
+            // For very small sounds, use a more aggressive attack to show activity
             if(targetPeakForUI > currentDisplayedPeak)
-                smoothingFactorToUse = PeakAttackFactor;
+            {
+                // Even faster response for sudden loud sounds
+                if(targetPeakForUI > currentDisplayedPeak * 2.0f)
+                    smoothingFactorToUse = 1.0f; // Immediate jump for large increases
+                else
+                    smoothingFactorToUse = PeakAttackFactor;
+            }
             else
-                smoothingFactorToUse = PeakDecayFactor;
+            {
+                // For quick drop-offs in sound, respond faster
+                if(currentDisplayedPeak > targetPeakForUI * 2.0f)
+                    smoothingFactorToUse = PeakDecayFactor * 1.5f;
+                else
+                    smoothingFactorToUse = PeakDecayFactor;
+            }
 
             newSmoothedDisplayValue = currentDisplayedPeak + (targetPeakForUI - currentDisplayedPeak) * smoothingFactorToUse;
 
-            if(smoothingFactorToUse == PeakAttackFactor)
+            if(smoothingFactorToUse == 1.0f) // For immediate jumps
+                newSmoothedDisplayValue = targetPeakForUI;
+            else if(smoothingFactorToUse == PeakAttackFactor || smoothingFactorToUse > 1.0f)
                 newSmoothedDisplayValue = Math.Min(newSmoothedDisplayValue, targetPeakForUI);
             else
                 newSmoothedDisplayValue = Math.Max(newSmoothedDisplayValue, targetPeakForUI);
