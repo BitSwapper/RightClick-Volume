@@ -21,10 +21,15 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     bool isDraggingSlider = false;
     Thumb sliderThumb;
     bool isWindowInitializationComplete = false;
-    const float BasePeakMeterScaleFactor = 150.0f;
 
     DispatcherTimer peakMeterTimer;
     float _peakLevel;
+
+    private const float PeakAttackFactor = 0.75f;
+    private const float PeakDecayFactor = .40f;
+
+    private const float BasePeakMeterScaleFactor = 150.0f;
+    private const double PeakCurvePower = 0.75;
 
     static readonly SolidColorBrush BG_Muted = new SolidColorBrush(Color.FromRgb(0x80, 0x30, 0x30));
     static readonly SolidColorBrush FG_Muted = Brushes.White;
@@ -37,8 +42,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     const string FORMAT_VolumeDisplay = "F0";
     const string IconMuted = "🔇";
     const string IconUnMuted = "🔊";
-    const float PeakMeterScaleFactor = 100.0f;
-    const double PeakCurvePower = 0.75;
+
 
     public event PropertyChangedEventHandler PropertyChanged;
 
@@ -95,13 +99,14 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
                 _peakLevel = value;
                 OnPropertyChanged(nameof(PeakLevel));
             }
+            else if(_peakLevel != value)
+                _peakLevel = value;
         }
     }
 
     public VolumeKnob()
     {
         InitializeComponent();
-        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob: Constructor called.");
         isWindowInitializationComplete = false;
         DataContext = this;
 
@@ -116,7 +121,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             Interval = TimeSpan.FromMilliseconds(5)
         };
         peakMeterTimer.Tick += PeakMeterTimer_Tick;
-        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob: peakMeterTimer Initialized. Interval: {peakMeterTimer.Interval.TotalMilliseconds}ms");
     }
 
 
@@ -127,7 +131,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
         Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: Method called for session: {(session?.DisplayName ?? "NULL SESSION")}, PID: {(session?.ProcessId.ToString() ?? "N/A")}");
         if(session == null)
         {
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: Session is NULL. Aborting show and throwing ArgumentNullException.");
             throw new ArgumentNullException(nameof(session));
         }
         this.session = session;
@@ -135,7 +138,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
         isUpdatingFromCode = true;
         AppName = session.DisplayName;
         Volume = session.Volume * VolumeScaleFactor;
-        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: AppName='{AppName}', Initial UI Volume={this.Volume} (Session Vol: {session.Volume:F2})");
         isUpdatingFromCode = false;
 
         UpdateMuteStateVisuals();
@@ -145,7 +147,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
         try
         {
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: Calling this.Show() and this.Activate()");
             this.Show();
             this.Activate();
 
@@ -157,19 +158,13 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
             if(peakMeterTimer != null)
             {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: Starting peakMeterTimer. Current PeakLevel (before reset): {PeakLevel:F2}");
                 PeakLevel = 0;
                 peakMeterTimer.Start();
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: peakMeterTimer STARTED. IsEnabled: {peakMeterTimer.IsEnabled}");
             }
-            else
-            {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: peakMeterTimer is NULL! Cannot start.");
-            }
+
         }
         catch(Exception ex)
         {
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: EXCEPTION during Show/Activate or timer start: {ex.Message}");
             try { this.Close(); } catch { }
         }
     }
@@ -205,18 +200,14 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
     void VolumeKnob_Loaded(object sender, RoutedEventArgs e)
     {
-        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob_Loaded: Fired.");
         AttachSliderEvents();
         this.isWindowInitializationComplete = true;
-        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob_Loaded: isWindowInitializationComplete = true.");
     }
 
     void VolumeKnob_Closed(object sender, EventArgs e)
     {
-        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob_Closed: Fired for App: {this.AppName}");
         if(peakMeterTimer != null)
         {
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob_Closed: Stopping peakMeterTimer. WasEnabled: {peakMeterTimer.IsEnabled}");
             peakMeterTimer.Stop();
         }
         PeakLevel = 0;
@@ -268,6 +259,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
         if(!isUpdatingFromCode && session != null)
         {
+            //used to have code here. leaving checks in place in case we want more
         }
     }
 
@@ -283,9 +275,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] MuteButton_Click: Session '{session.DisplayName}' MUTED. PeakLevel set to 0.");
             }
             else
-            {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] MuteButton_Click: Session '{session.DisplayName}' UNMUTED.");
-            }
         }
     }
 
@@ -322,13 +312,9 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
     protected void OnPropertyChanged(string propertyName)
     {
         if(propertyName == nameof(PeakLevel))
-        {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] OnPropertyChanged Fired for: {propertyName} (New Value: {_peakLevel:F4}) on App: {this.AppName}");
-        }
         else if(propertyName == nameof(Volume))
-        {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] OnPropertyChanged Fired for: {propertyName} (New Value: {this.volume:F2}) on App: {this.AppName}");
-        }
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
@@ -354,8 +340,7 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             }
         }
     }
-
-    void PeakMeterTimer_Tick(object sender, EventArgs e)
+    private void PeakMeterTimer_Tick(object sender, EventArgs e)
     {
         if(session != null && this.IsVisible)
         {
@@ -377,19 +362,30 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
 
             float currentVolumeSettingFactor = this.Volume / 100.0f;
 
-            float finalPeakForUI = scaledPeak * currentVolumeSettingFactor;
+            float targetPeakForUI = scaledPeak * currentVolumeSettingFactor;
 
-            finalPeakForUI = Math.Clamp(finalPeakForUI, 0f, 100f);
-
+            targetPeakForUI = Math.Clamp(targetPeakForUI, 0f, 100f);
 
             if(session.IsMuted)
-            {
-                finalPeakForUI = 0;
-            }
+                targetPeakForUI = 0;
 
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTick for '{session.DisplayName}': Vis={this.IsVisible}, Muted={session.IsMuted}, RawPeak={rawPeak:F5}, CurvedP={curvedPeak:F5}, ScaledP={scaledPeak:F2}, VolFactor={currentVolumeSettingFactor:F2}, FinalUI={finalPeakForUI:F2}, OldPeakProp={_peakLevel:F2}");
+            float currentDisplayedPeak = _peakLevel;
+            float newSmoothedDisplayValue;
+            float smoothingFactorToUse;
 
-            PeakLevel = finalPeakForUI;
+            if(targetPeakForUI > currentDisplayedPeak)
+                smoothingFactorToUse = PeakAttackFactor;
+            else
+                smoothingFactorToUse = PeakDecayFactor;
+
+            newSmoothedDisplayValue = currentDisplayedPeak + (targetPeakForUI - currentDisplayedPeak) * smoothingFactorToUse;
+
+            if(smoothingFactorToUse == PeakAttackFactor)
+                newSmoothedDisplayValue = Math.Min(newSmoothedDisplayValue, targetPeakForUI);
+            else
+                newSmoothedDisplayValue = Math.Max(newSmoothedDisplayValue, targetPeakForUI);
+
+            PeakLevel = newSmoothedDisplayValue;
         }
         else
         {
@@ -397,7 +393,6 @@ public partial class VolumeKnob : Window, INotifyPropertyChanged
             if(session == null) reason = "Session is null";
             else if(!this.IsVisible) reason = "Window not visible";
 
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTimer_Tick: Conditions not met ({reason}). Setting PeakLevel to 0.");
             PeakLevel = 0;
         }
     }
