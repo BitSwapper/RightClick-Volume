@@ -21,13 +21,9 @@
             <!-- Buttons -->
         </Grid.RowDefinitions>
 
-        <!-- Launch on Startup -->
-        <CheckBox x:Name="LaunchOnStartupCheckBox" Grid.Row="0" Margin="5"
-                  Content="Launch application when Windows starts"/>
+        <CheckBox x:Name="LaunchOnStartupCheckBox" Grid.Row="0" Margin="5" Content="Launch application when Windows starts"/>
 
-        <!-- Show Peak Volume Bar CheckBox -->
-        <CheckBox x:Name="ShowPeakVolumeBarCheckBox" Grid.Row="1" Margin="5"
-                  Content="Show peak volume meter"/>
+        <CheckBox x:Name="ShowPeakVolumeBarCheckBox" Grid.Row="1" Margin="5" Content="Show peak volume meter"/>
 
         <!-- Hotkey Settings -->
         <GroupBox Header="Activation Hotkey (Modifiers + Right Mouse Click)" Grid.Row="2" Margin="5">

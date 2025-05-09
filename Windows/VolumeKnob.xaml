@@ -24,7 +24,6 @@
         <local:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <local:ValueToHeightConverter x:Key="ValueToHeightConverter"/>
 
-        <!-- Styles omitted for brevity, they remain the same -->
         <Style x:Key="ModernButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="24"/>
             <Setter Property="Height" Value="24"/>
@@ -216,7 +215,6 @@
             <!-- Row 1: Current Volume Text -->
             <TextBlock x:Name="TextCurVol" Grid.Row="1" Text="{Binding CurVol, FallbackValue=50, TargetNullValue=--}" Foreground="#EFEFEF" FontWeight="DemiBold" FontSize="20" TextAlignment="Center" Margin="0,0,0,5"
                        MouseLeftButtonDown="Window_MouseLeftButtonDown_Drag"/>
-            <!-- Add handler here -->
 
             <!-- Row 2 & 3 (spanned): Volume Slider and Peak Meter -->
             <Grid Grid.Row="2" Grid.RowSpan="2"
@@ -250,7 +248,6 @@
             <!-- Row 4: App Name Text -->
             <TextBlock x:Name="AppNameTextBlock" Grid.Row="4" Text="{Binding AppName, FallbackValue=Application Name, TargetNullValue=Unknown App}" Foreground="#DDDDDD" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" FontSize="11" Margin="0,8,0,0"
                        MouseLeftButtonDown="Window_MouseLeftButtonDown_Drag"/>
-            <!-- Add handler here -->
         </Grid>
     </Border>
 </Window>
