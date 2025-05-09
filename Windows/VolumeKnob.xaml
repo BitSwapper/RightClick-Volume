@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:RightClickVolume"
+        xmlns:p="clr-namespace:RightClickVolume.Properties"
         mc:Ignorable="d"
         Title="Volume Knob"
         Width="70" Height="300"
@@ -23,9 +24,8 @@
     <!-- ========================== -->
     <Window.Resources>
 
-        <!-- Converter (Ensure ValueToHeightConverter exists in the 'local' namespace) -->
         <local:ValueToHeightConverter x:Key="ValueToHeightConverter"/>
-        
+        <local:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
         <!-- Base Button Style -->
         <Style x:Key="ModernButtonStyle" TargetType="Button">
@@ -258,17 +258,18 @@
 
                     <!-- Peak Volume Meter -->
                 <ProgressBar x:Name="PeakVolumeMeter"
-             BorderThickness="0"
-             Orientation="Vertical"
-             Foreground="#7F0A9A34"
-             Background="Transparent"             
-             Width="10"
-             Minimum="0" Maximum="100"
-             Value="{Binding PeakLevel, Mode=OneWay, FallbackValue=0}"
-             VerticalAlignment="Stretch"
-             Margin="5, 2, 0, 1"
-             IsEnabled="{Binding Path=IsEnabled, ElementName=VolumeSlider}"/>
-             
+                             BorderThickness="0"
+                             Orientation="Vertical"
+                             Foreground="#7F0A9A34"
+                             Background="Transparent"             
+                             Width="10"
+                             Minimum="0" Maximum="100"
+                             Value="{Binding PeakLevel, Mode=OneWay, FallbackValue=0}"
+                             VerticalAlignment="Stretch"
+                             Margin="5, 2, 0, 1"
+                             IsEnabled="{Binding Path=IsEnabled, ElementName=VolumeSlider}"
+                             Visibility="{Binding Source={x:Static p:Settings.Default}, Path=ShowPeakVolumeBar, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"/>
+                <!-- Modified Visibility -->
             </Grid>
 
             <!-- Row 4 (was Row 3): App Name Text -->
