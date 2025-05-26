@@ -15,13 +15,13 @@ public class MappingManager : IMappingManager
 {
     const char UIA_PROCESS_SEPARATOR = '|';
     const char PROCESS_LIST_SEPARATOR = ';';
-    readonly IDialogService _dialogService;
-    readonly ISettingsService _settingsService;
+    readonly IDialogService dialogService;
+    readonly ISettingsService settingsService;
 
     public MappingManager(IDialogService dialogService, ISettingsService settingsService)
     {
-        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
     }
 
     public Dictionary<string, List<string>> LoadManualMappings()
@@ -29,9 +29,9 @@ public class MappingManager : IMappingManager
         var mappings = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            if(_settingsService.ManualMappings == null) return mappings;
+            if(settingsService.ManualMappings == null) return mappings;
 
-            foreach(string mappingString in _settingsService.ManualMappings)
+            foreach(string mappingString in settingsService.ManualMappings)
                 TryParseAndAddMapping(mappingString, mappings);
         }
         catch { }
@@ -81,7 +81,7 @@ public class MappingManager : IMappingManager
         }
         catch(Exception ex)
         {
-            _dialogService.ShowMessageBox($"Failed to save the mapping: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            dialogService.ShowMessageBox($"Failed to save the mapping: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
     }
@@ -110,8 +110,8 @@ public class MappingManager : IMappingManager
             if(kvp.Value?.Count > 0)
                 settingsCollection.Add($"{kvp.Key}{UIA_PROCESS_SEPARATOR}{string.Join(PROCESS_LIST_SEPARATOR.ToString(), kvp.Value)}");
 
-        _settingsService.ManualMappings = settingsCollection;
-        _settingsService.Save();
+        settingsService.ManualMappings = settingsCollection;
+        settingsService.Save();
     }
 
     public async Task PromptAndSaveMappingAsync(string uiaNameToMap, CancellationToken cancellationToken) =>
@@ -131,7 +131,7 @@ public class MappingManager : IMappingManager
     bool PromptUserForMapping(string uiaNameToMap)
     {
         string promptMessage = $"Could not automatically find an audio process for the clicked item:\n\nUIA Name: '{uiaNameToMap}'\n\nDo you want to manually map this name to a specific running process?";
-        MessageBoxResult result = _dialogService.ShowMessageBox(promptMessage, "Manual Mapping Needed", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        MessageBoxResult result = dialogService.ShowMessageBox(promptMessage, "Manual Mapping Needed", MessageBoxButton.YesNo, MessageBoxImage.Question);
         return result == MessageBoxResult.Yes;
     }
 
@@ -139,12 +139,12 @@ public class MappingManager : IMappingManager
     {
         try
         {
-            var (dialogResult, uiaNameResult, processNameResult) = _dialogService.ShowAddMappingWindow(uiaNameToMap);
+            var (dialogResult, uiaNameResult, processNameResult) = dialogService.ShowAddMappingWindow(uiaNameToMap);
             HandleMappingDialogResult(dialogResult, uiaNameResult, processNameResult);
         }
         catch(Exception ex)
         {
-            _dialogService.ShowMessageBox($"Failed to open the mapping window: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            dialogService.ShowMessageBox($"Failed to open the mapping window: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -154,6 +154,6 @@ public class MappingManager : IMappingManager
             return;
 
         if(SaveOrUpdateManualMapping(uiaName, processName))
-            _dialogService.ShowMessageBox($"Mapping for process '{processName}' saved/updated under UIA Name:\n'{uiaName}'\n\nPlease try Ctrl+Right-clicking the item again.", "Mapping Saved/Updated", MessageBoxButton.OK, MessageBoxImage.Information);
+            dialogService.ShowMessageBox($"Mapping for process '{processName}' saved/updated under UIA Name:\n'{uiaName}'\n\nPlease try Ctrl+Right-clicking the item again.", "Mapping Saved/Updated", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

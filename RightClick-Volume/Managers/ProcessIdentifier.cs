@@ -13,8 +13,8 @@ namespace RightClickVolume.Managers;
 
 public class ProcessIdentifier : IProcessIdentifier
 {
-    private readonly uint _currentProcessId;
-    private readonly IMappingManager _mappingManager;
+    private readonly uint currentProcessId;
+    private readonly IMappingManager mappingManager;
 
     public class IdentificationResult
     {
@@ -26,8 +26,8 @@ public class ProcessIdentifier : IProcessIdentifier
 
     public ProcessIdentifier(uint currentProcessId, IMappingManager mappingManager)
     {
-        _currentProcessId = currentProcessId;
-        _mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
+        this.currentProcessId = currentProcessId;
+        this.mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
     }
     public IdentificationResult IdentifyProcess(AutomationElement targetElement, string extractedName, CancellationToken cancellationToken)
     {
@@ -110,7 +110,7 @@ public class ProcessIdentifier : IProcessIdentifier
         if(string.IsNullOrWhiteSpace(extractedName) || extractedName == "[Error getting name]" || extractedName == "[Unknown]")
             return new IdentificationResult { ProcessId = 0 };
 
-        var userMappings = _mappingManager.LoadManualMappings();
+        var userMappings = mappingManager.LoadManualMappings();
         if(!userMappings.TryGetValue(extractedName, out List<string> mappedProcessNames) || mappedProcessNames.Count == 0)
             return new IdentificationResult { ProcessId = 0 };
 
@@ -257,7 +257,7 @@ public class ProcessIdentifier : IProcessIdentifier
 
     bool IsValidAppPid(uint pid, string sourceDescription, bool allowExplorer)
     {
-        if(pid == 0 || pid == _currentProcessId) return false;
+        if(pid == 0 || pid == currentProcessId) return false;
 
         try
         {

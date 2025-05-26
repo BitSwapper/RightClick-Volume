@@ -35,10 +35,7 @@ public class WindowsHooks : IWindowsHookService
     HookProc mouseProcDelegate;
     public event EventHandler<MouseHookEventArgs> RightMouseClick;
 
-    public WindowsHooks()
-    {
-        mouseProcDelegate = MouseHookCallback;
-    }
+    public WindowsHooks() => mouseProcDelegate = MouseHookCallback;
 
     public void InstallMouseHook()
     {

@@ -1,7 +1,7 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
-using System;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,19 +11,19 @@ namespace RightClickVolume.ViewModels;
 
 public partial class ProcessSelectorViewModel : ObservableObject
 {
-    private readonly IDialogService _dialogService;
+    private readonly IDialogService dialogService;
 
     [ObservableProperty]
-    private ObservableCollection<Process> _processes;
+    private ObservableCollection<Process> processes;
 
     [ObservableProperty]
-    private Process _selectedProcess;
+    private Process selectedProcess;
 
     public event Action<bool?> CloseRequested;
 
     public ProcessSelectorViewModel(IDialogService dialogService)
     {
-        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         Processes = new ObservableCollection<Process>();
         LoadProcesses();
     }
@@ -44,7 +44,7 @@ public partial class ProcessSelectorViewModel : ObservableObject
         }
         catch(Exception ex)
         {
-            _dialogService.ShowMessageBox($"Error loading processes: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            dialogService.ShowMessageBox($"Error loading processes: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -57,15 +57,12 @@ public partial class ProcessSelectorViewModel : ObservableObject
         }
         else
         {
-            _dialogService.ShowMessageBox("Please select a process from the list.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+            dialogService.ShowMessageBox("Please select a process from the list.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
     [RelayCommand]
-    private void Cancel()
-    {
-        CloseRequested?.Invoke(false);
-    }
+    private void Cancel() => CloseRequested?.Invoke(false);
 
     public void HandleDoubleClick()
     {

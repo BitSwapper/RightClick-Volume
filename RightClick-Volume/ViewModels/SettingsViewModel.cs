@@ -17,42 +17,42 @@ public partial class SettingsViewModel : ObservableObject
     const char UIA_PROCESS_SEPARATOR = '|';
     const char PROCESS_LIST_SEPARATOR = ';';
 
-    private readonly ISettingsService _settingsService;
-    private readonly IDialogService _dialogService;
-    private readonly IMappingManager _mappingManager;
+    private readonly ISettingsService settingsService;
+    private readonly IDialogService dialogService;
+    private readonly IMappingManager mappingManager;
 
 
     [ObservableProperty]
-    private ObservableCollection<MappingEntry> _mappings;
+    private ObservableCollection<MappingEntry> mappings;
 
     [ObservableProperty]
-    private MappingEntry _selectedMapping;
+    private MappingEntry selectedMapping;
 
     [ObservableProperty]
-    private bool _launchOnStartup;
+    private bool launchOnStartup;
 
     [ObservableProperty]
-    private bool _showPeakVolumeBar;
+    private bool showPeakVolumeBar;
 
     [ObservableProperty]
-    private bool _hotkeyCtrl;
+    private bool hotkeyCtrl;
 
     [ObservableProperty]
-    private bool _hotkeyAlt;
+    private bool hotkeyAlt;
 
     [ObservableProperty]
-    private bool _hotkeyShift;
+    private bool hotkeyShift;
 
     [ObservableProperty]
-    private bool _hotkeyWin;
+    private bool hotkeyWin;
 
     public event Action<bool?> CloseRequested;
 
     public SettingsViewModel(ISettingsService settingsService, IDialogService dialogService, IMappingManager mappingManager)
     {
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
-        _mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
+        this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        this.mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
 
         Mappings = new ObservableCollection<MappingEntry>();
         LoadSettings();
@@ -60,24 +60,24 @@ public partial class SettingsViewModel : ObservableObject
 
     private void LoadSettings()
     {
-        LaunchOnStartup = _settingsService.LaunchOnStartup;
-        ShowPeakVolumeBar = _settingsService.ShowPeakVolumeBar;
+        LaunchOnStartup = settingsService.LaunchOnStartup;
+        ShowPeakVolumeBar = settingsService.ShowPeakVolumeBar;
         LoadHotkeySettings();
         LoadMappingsFromService();
     }
 
     private void LoadHotkeySettings()
     {
-        HotkeyCtrl = _settingsService.Hotkey_Ctrl;
-        HotkeyAlt = _settingsService.Hotkey_Alt;
-        HotkeyShift = _settingsService.Hotkey_Shift;
-        HotkeyWin = _settingsService.Hotkey_Win;
+        HotkeyCtrl = settingsService.Hotkey_Ctrl;
+        HotkeyAlt = settingsService.Hotkey_Alt;
+        HotkeyShift = settingsService.Hotkey_Shift;
+        HotkeyWin = settingsService.Hotkey_Win;
     }
 
     private void LoadMappingsFromService()
     {
         Mappings.Clear();
-        var loadedMappingsData = _mappingManager.LoadManualMappings();
+        var loadedMappingsData = mappingManager.LoadManualMappings();
 
         var uniqueUiaNames = new Dictionary<string, MappingEntry>(StringComparer.OrdinalIgnoreCase);
 
@@ -120,7 +120,7 @@ public partial class SettingsViewModel : ObservableObject
     {
         if(!HotkeyCtrl && !HotkeyAlt && !HotkeyShift && !HotkeyWin)
         {
-            _dialogService.ShowMessageBox("Please select at least one modifier key for the activation hotkey.", "Invalid Hotkey", MessageBoxButton.OK, MessageBoxImage.Warning);
+            dialogService.ShowMessageBox("Please select at least one modifier key for the activation hotkey.", "Invalid Hotkey", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         return true;
@@ -131,7 +131,7 @@ public partial class SettingsViewModel : ObservableObject
         var duplicateUia = Mappings.GroupBy(m => m.UiaName, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => g.Key).FirstOrDefault();
         if(duplicateUia != null)
         {
-            _dialogService.ShowMessageBox($"The UIA Name '{duplicateUia}' is used more than once. Please remove duplicate entries.", "Duplicate Mapping Key", MessageBoxButton.OK, MessageBoxImage.Warning);
+            dialogService.ShowMessageBox($"The UIA Name '{duplicateUia}' is used more than once. Please remove duplicate entries.", "Duplicate Mapping Key", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         return true;
@@ -142,7 +142,7 @@ public partial class SettingsViewModel : ObservableObject
         var emptyMapping = Mappings.FirstOrDefault(m => string.IsNullOrWhiteSpace(m.UiaName) || m.ProcessNames == null || m.ProcessNames.Count == 0 || m.ProcessNames.All(string.IsNullOrWhiteSpace));
         if(emptyMapping != null)
         {
-            _dialogService.ShowMessageBox($"Mapping for UIA Name '{emptyMapping?.UiaName ?? "<empty>"}' has no valid process names associated with it. Please edit or remove it.", "Invalid Mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
+            dialogService.ShowMessageBox($"Mapping for UIA Name '{emptyMapping?.UiaName ?? "<empty>"}' has no valid process names associated with it. Please edit or remove it.", "Invalid Mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         return true;
@@ -151,7 +151,7 @@ public partial class SettingsViewModel : ObservableObject
     private void SaveSettingsToService()
     {
         SaveStartupSetting();
-        _settingsService.ShowPeakVolumeBar = ShowPeakVolumeBar;
+        settingsService.ShowPeakVolumeBar = ShowPeakVolumeBar;
         SaveHotkeySettingsToService();
         SaveMappingsToService();
         TrySaveSettingsToStorage();
@@ -161,9 +161,9 @@ public partial class SettingsViewModel : ObservableObject
     {
         bool wantsStartup = this.LaunchOnStartup;
 
-        if(_settingsService.LaunchOnStartup == wantsStartup) return;
+        if(settingsService.LaunchOnStartup == wantsStartup) return;
 
-        _settingsService.LaunchOnStartup = wantsStartup;
+        settingsService.LaunchOnStartup = wantsStartup;
         try
         {
             if(wantsStartup) Native.OS_StartupManager.AddToStartup();
@@ -171,16 +171,16 @@ public partial class SettingsViewModel : ObservableObject
         }
         catch(Exception ex)
         {
-            _dialogService.ShowMessageBox($"Error updating startup setting: {ex.Message}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            dialogService.ShowMessageBox($"Error updating startup setting: {ex.Message}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     private void SaveHotkeySettingsToService()
     {
-        _settingsService.Hotkey_Ctrl = HotkeyCtrl;
-        _settingsService.Hotkey_Alt = HotkeyAlt;
-        _settingsService.Hotkey_Shift = HotkeyShift;
-        _settingsService.Hotkey_Win = HotkeyWin;
+        settingsService.Hotkey_Ctrl = HotkeyCtrl;
+        settingsService.Hotkey_Alt = HotkeyAlt;
+        settingsService.Hotkey_Shift = HotkeyShift;
+        settingsService.Hotkey_Win = HotkeyWin;
     }
 
     private void SaveMappingsToService()
@@ -197,25 +197,25 @@ public partial class SettingsViewModel : ObservableObject
             if(!string.IsNullOrWhiteSpace(entry.UiaName) && validProcesses.Count > 0)
                 settingsCollection.Add($"{entry.UiaName.Trim()}{UIA_PROCESS_SEPARATOR}{string.Join(PROCESS_LIST_SEPARATOR.ToString(), validProcesses)}");
         }
-        _settingsService.ManualMappings = settingsCollection;
+        settingsService.ManualMappings = settingsCollection;
     }
 
     private void TrySaveSettingsToStorage()
     {
-        try { _settingsService.Save(); }
-        catch(Exception ex) { _dialogService.ShowMessageBox($"Error saving settings: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error); }
+        try { settingsService.Save(); }
+        catch(Exception ex) { dialogService.ShowMessageBox($"Error saving settings: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     [RelayCommand]
     private void AddEdit()
     {
-        var (dialogResult, uiaName, processName) = _dialogService.ShowAddMappingWindow();
+        var (dialogResult, uiaName, processName) = dialogService.ShowAddMappingWindow();
         if(dialogResult != true) return;
 
-        if(_mappingManager.SaveOrUpdateManualMapping(uiaName, processName))
+        if(mappingManager.SaveOrUpdateManualMapping(uiaName, processName))
         {
             LoadSettings();
-            _dialogService.ShowMessageBox($"Mapping for process '{processName}' added/updated under UIA Name '{uiaName}'.", "Mapping Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+            dialogService.ShowMessageBox($"Mapping for process '{processName}' added/updated under UIA Name '{uiaName}'.", "Mapping Saved", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -224,11 +224,11 @@ public partial class SettingsViewModel : ObservableObject
     {
         if(SelectedMapping == null)
         {
-            _dialogService.ShowMessageBox("Please select a mapping entry to remove.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+            dialogService.ShowMessageBox("Please select a mapping entry to remove.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var result = _dialogService.ShowMessageBox($"Are you sure you want to remove the entire mapping for UIA Name '{SelectedMapping.UiaName}'?\n\nThis will remove the association for:\n{SelectedMapping.ProcessNameList}", "Confirm Removal", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var result = dialogService.ShowMessageBox($"Are you sure you want to remove the entire mapping for UIA Name '{SelectedMapping.UiaName}'?\n\nThis will remove the association for:\n{SelectedMapping.ProcessNameList}", "Confirm Removal", MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
         if(result == MessageBoxResult.Yes)
         {
@@ -248,8 +248,5 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void Cancel()
-    {
-        CloseRequested?.Invoke(false);
-    }
+    private void Cancel() => CloseRequested?.Invoke(false);
 }

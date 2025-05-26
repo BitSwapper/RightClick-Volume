@@ -1,18 +1,16 @@
 ﻿using System;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RightClickVolume.Interfaces;
-using RightClickVolume.Properties;
 
 namespace RightClickVolume.ViewModels;
 
 public partial class VolumeKnobViewModel : ObservableObject
 {
-    private IAppAudioSession _session;
-    private bool _isUpdatingVolumeFromCode;
+    private IAppAudioSession session;
+    private bool isUpdatingVolumeFromCode;
 
     const float VolumeScaleFactor = 100.0f;
     const string FORMAT_VolumeDisplay = "F0";
@@ -76,12 +74,12 @@ public partial class VolumeKnobViewModel : ObservableObject
 
     public void InitializeSession(IAppAudioSession session)
     {
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-        AppName = _session.DisplayName;
+        this.session = session ?? throw new ArgumentNullException(nameof(session));
+        AppName = this.session.DisplayName;
 
-        _isUpdatingVolumeFromCode = true;
-        Volume = _session.Volume * VolumeScaleFactor;
-        _isUpdatingVolumeFromCode = false;
+        isUpdatingVolumeFromCode = true;
+        Volume = this.session.Volume * VolumeScaleFactor;
+        isUpdatingVolumeFromCode = false;
 
         UpdateMuteState();
     }
@@ -98,14 +96,14 @@ public partial class VolumeKnobViewModel : ObservableObject
 
         CurVol = value.ToString(FORMAT_VolumeDisplay);
 
-        if(!_isUpdatingVolumeFromCode && _session != null)
+        if(!isUpdatingVolumeFromCode && session != null)
         {
-            if(_session.IsMuted && value > 0.001f)
+            if(session.IsMuted && value > 0.001f)
             {
-                _session.SetMute(false);
+                session.SetMute(false);
                 UpdateMuteState();
             }
-            _session.SetVolume(value / VolumeScaleFactor);
+            session.SetVolume(value / VolumeScaleFactor);
         }
         Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] OnVolumeChanged: Volume is now {value:F2} on App: {this.AppName}");
     }
@@ -119,33 +117,30 @@ public partial class VolumeKnobViewModel : ObservableObject
     [RelayCommand]
     private void Mute()
     {
-        if(_session != null)
+        if(session != null)
         {
-            _session.SetMute(!_session.IsMuted);
+            session.SetMute(!session.IsMuted);
             UpdateMuteState();
-            if(_session.IsMuted)
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] MuteCommand: Session '{_session.DisplayName}' MUTED.");
+            if(session.IsMuted)
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] MuteCommand: Session '{session.DisplayName}' MUTED.");
             else
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] MuteCommand: Session '{_session.DisplayName}' UNMUTED.");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] MuteCommand: Session '{session.DisplayName}' UNMUTED.");
         }
     }
 
     [RelayCommand]
-    private void Close()
-    {
-        RequestClose?.Invoke();
-    }
+    private void Close() => RequestClose?.Invoke();
 
     public void UpdateMuteState()
     {
-        if(_session == null) return;
-        IsMuted = _session.IsMuted;
+        if(session == null) return;
+        IsMuted = session.IsMuted;
         MuteButtonContent = IsMuted ? IconMuted : IconUnMuted;
         MuteButtonBackground = IsMuted ? s_bgMuted : s_bgUnMuted;
         MuteButtonForeground = IsMuted ? s_fgMuted : s_fgUnMuted;
         IsVolumeSliderEnabled = !IsMuted;
     }
 
-    public bool IsSessionMuted() => _session?.IsMuted ?? false;
-    public string GetSessionDisplayName() => _session?.DisplayName;
+    public bool IsSessionMuted() => session?.IsMuted ?? false;
+    public string GetSessionDisplayName() => session?.DisplayName;
 }

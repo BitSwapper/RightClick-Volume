@@ -9,14 +9,14 @@ namespace RightClickVolume.ViewModels;
 
 public partial class AddMappingViewModel : ObservableObject
 {
-    readonly IDialogService _dialogService;
+    readonly IDialogService dialogService;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(OkCommand))]
-    string _uiaName;
+    string uiaName;
 
     [ObservableProperty]
-    Process _selectedProcess;
+    Process selectedProcess;
 
     public string ProcessNameDisplay => SelectedProcess?.ProcessName;
     public Func<Process> ShowProcessSelectorDialogFunc { get; set; }
@@ -24,8 +24,8 @@ public partial class AddMappingViewModel : ObservableObject
 
     public AddMappingViewModel(string initialUiaName, IDialogService dialogService)
     {
-        _uiaName = initialUiaName;
-        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        uiaName = initialUiaName;
+        this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
     }
 
     partial void OnSelectedProcessChanged(Process value)
@@ -51,12 +51,12 @@ public partial class AddMappingViewModel : ObservableObject
     {
         if(string.IsNullOrWhiteSpace(UiaName))
         {
-            _dialogService.ShowMessageBox("UIA Name cannot be empty.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            dialogService.ShowMessageBox("UIA Name cannot be empty.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if(SelectedProcess == null)
         {
-            _dialogService.ShowMessageBox("Please select a target process.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            dialogService.ShowMessageBox("Please select a target process.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         RequestCloseDialog?.Invoke(true);

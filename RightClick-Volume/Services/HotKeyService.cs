@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Windows.Input;
 using RightClickVolume.Interfaces;
 using RightClickVolume.Native;
 
@@ -7,24 +6,29 @@ namespace RightClickVolume.Services;
 
 public class HotkeyService : IHotkeyService
 {
-    private readonly IWindowsHookService _windowsHookService;
-    private readonly ISettingsService _settingsService;
-    private bool _isMonitoring = false;
+    private readonly IWindowsHookService windowsHookService;
+    private readonly ISettingsService settingsService;
+    private readonly IKeyboardStateProvider keyboardStateProvider;
+    private bool isMonitoring = false;
 
-    private bool _reqCtrl;
-    private bool _reqAlt;
-    private bool _reqShift;
-    private bool _reqWin;
+    private bool reqCtrl;
+    private bool reqAlt;
+    private bool reqShift;
+    private bool reqWin;
 
     public event EventHandler<GlobalHotkeyPressedEventArgs> GlobalHotkeyPressed;
 
-    public HotkeyService(IWindowsHookService windowsHookService, ISettingsService settingsService)
+    public HotkeyService(
+        IWindowsHookService windowsHookService,
+        ISettingsService settingsService,
+        IKeyboardStateProvider keyboardStateProvider)
     {
-        _windowsHookService = windowsHookService ?? throw new ArgumentNullException(nameof(windowsHookService));
-        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        this.windowsHookService = windowsHookService ?? throw new ArgumentNullException(nameof(windowsHookService));
+        this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        this.keyboardStateProvider = keyboardStateProvider ?? throw new ArgumentNullException(nameof(keyboardStateProvider));
 
         LoadHotkeySettings();
-        _settingsService.PropertyChanged += OnSettingsChanged;
+        this.settingsService.PropertyChanged += OnSettingsChanged;
     }
 
     private void OnSettingsChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -40,26 +44,26 @@ public class HotkeyService : IHotkeyService
 
     private void LoadHotkeySettings()
     {
-        _reqCtrl = _settingsService.Hotkey_Ctrl;
-        _reqAlt = _settingsService.Hotkey_Alt;
-        _reqShift = _settingsService.Hotkey_Shift;
-        _reqWin = _settingsService.Hotkey_Win;
+        reqCtrl = settingsService.Hotkey_Ctrl;
+        reqAlt = settingsService.Hotkey_Alt;
+        reqShift = settingsService.Hotkey_Shift;
+        reqWin = settingsService.Hotkey_Win;
     }
 
     public void StartMonitoring()
     {
-        if(_isMonitoring) return;
-        _windowsHookService.RightMouseClick += OnGlobalRightMouseClick;
-        _windowsHookService.InstallMouseHook();
-        _isMonitoring = true;
+        if(isMonitoring) return;
+        windowsHookService.RightMouseClick += OnGlobalRightMouseClick;
+        windowsHookService.InstallMouseHook();
+        isMonitoring = true;
     }
 
     public void StopMonitoring()
     {
-        if(!_isMonitoring) return;
-        _windowsHookService.UninstallMouseHook();
-        _windowsHookService.RightMouseClick -= OnGlobalRightMouseClick;
-        _isMonitoring = false;
+        if(!isMonitoring) return;
+        windowsHookService.UninstallMouseHook();
+        windowsHookService.RightMouseClick -= OnGlobalRightMouseClick;
+        isMonitoring = false;
     }
 
     private void OnGlobalRightMouseClick(object sender, MouseHookEventArgs e)
@@ -72,21 +76,17 @@ public class HotkeyService : IHotkeyService
 
     private bool CheckHotkeyModifiers()
     {
-        bool ctrlPressed = (Keyboard.GetKeyStates(Key.LeftCtrl) & KeyStates.Down) > 0 ||
-                           (Keyboard.GetKeyStates(Key.RightCtrl) & KeyStates.Down) > 0;
-        bool altPressed = (Keyboard.GetKeyStates(Key.LeftAlt) & KeyStates.Down) > 0 ||
-                          (Keyboard.GetKeyStates(Key.RightAlt) & KeyStates.Down) > 0;
-        bool shiftPressed = (Keyboard.GetKeyStates(Key.LeftShift) & KeyStates.Down) > 0 ||
-                            (Keyboard.GetKeyStates(Key.RightShift) & KeyStates.Down) > 0;
-        bool winPressed = (Keyboard.GetKeyStates(Key.LWin) & KeyStates.Down) > 0 ||
-                          (Keyboard.GetKeyStates(Key.RWin) & KeyStates.Down) > 0;
+        bool ctrlPressed = keyboardStateProvider.IsCtrlPressed();
+        bool altPressed = keyboardStateProvider.IsAltPressed();
+        bool shiftPressed = keyboardStateProvider.IsShiftPressed();
+        bool winPressed = keyboardStateProvider.IsWinPressed();
 
-        bool hotkeyMatch = (ctrlPressed == _reqCtrl) &&
-                           (altPressed == _reqAlt) &&
-                           (shiftPressed == _reqShift) &&
-                           (winPressed == _reqWin);
+        bool hotkeyMatch = (ctrlPressed == reqCtrl) &&
+                           (altPressed == reqAlt) &&
+                           (shiftPressed == reqShift) &&
+                           (winPressed == reqWin);
 
-        bool anyModifierRequired = _reqCtrl || _reqAlt || _reqShift || _reqWin;
+        bool anyModifierRequired = reqCtrl || reqAlt || reqShift || reqWin;
 
         return hotkeyMatch && anyModifierRequired;
     }
@@ -94,6 +94,7 @@ public class HotkeyService : IHotkeyService
     public void Dispose()
     {
         StopMonitoring();
-        _settingsService.PropertyChanged -= OnSettingsChanged;
+        if(settingsService != null)
+            settingsService.PropertyChanged -= OnSettingsChanged;
     }
 }

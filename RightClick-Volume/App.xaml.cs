@@ -4,13 +4,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using Hardcodet.Wpf.TaskbarNotification;
+using Microsoft.Extensions.DependencyInjection;
 using RightClickVolume.Interfaces;
 using RightClickVolume.Managers;
 using RightClickVolume.Native;
 using RightClickVolume.Properties;
 using RightClickVolume.Services;
 using RightClickVolume.ViewModels;
-using Microsoft.Extensions.DependencyInjection;
 
 
 namespace RightClickVolume;
@@ -44,7 +44,8 @@ public partial class App : Application
         services.AddSingleton<IUiaScannerService, UiaTaskbarScanner>();
         services.AddSingleton<IVolumeKnobManager, VolumeKnobManager>();
 
-        services.AddSingleton<IProcessIdentifier>(provider => {
+        services.AddSingleton<IProcessIdentifier>(provider =>
+        {
             uint currentProcId = 0;
             try
             {
@@ -58,6 +59,7 @@ public partial class App : Application
             return new ProcessIdentifier(currentProcId, mappingManager);
         });
 
+        services.AddSingleton<IKeyboardStateProvider, KeyboardStateProvider>();
         services.AddSingleton<IHotkeyService, HotkeyService>();
 
         services.AddSingleton<ITaskbarMonitor, TaskbarMonitor>();
@@ -152,10 +154,7 @@ public partial class App : Application
         }
     }
 
-    void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        OpenSettingsWindow();
-    }
+    void SettingsMenuItem_Click(object sender, RoutedEventArgs e) => OpenSettingsWindow();
 
     void OpenLink(object sender, RoutedEventArgs e)
     {
@@ -187,10 +186,7 @@ public partial class App : Application
         }
     }
 
-    void ExitMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ShutdownApplication();
-    }
+    void ExitMenuItem_Click(object sender, RoutedEventArgs e) => ShutdownApplication();
 
     protected override void OnExit(ExitEventArgs e)
     {

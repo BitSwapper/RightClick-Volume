@@ -7,7 +7,6 @@ using System.Windows.Automation;
 using System.Windows.Threading;
 using RightClickVolume.Interfaces;
 using RightClickVolume.Models;
-using RightClickVolume.Native;
 
 
 namespace RightClickVolume.Managers;
@@ -17,17 +16,17 @@ public class TaskbarMonitor : ITaskbarMonitor
     const string ERROR_TITLE = "Error";
     const string AUDIO_SESSION_TITLE = "Audio Session Not Found";
 
-    private readonly IAudioManager _audioManager;
-    private readonly IUiaScannerService _uiaScannerService;
-    private readonly IProcessIdentifier _processIdentifier;
-    private readonly IMappingManager _mappingManager;
-    private readonly IVolumeKnobManager _knobManager;
-    private readonly IDialogService _dialogService;
-    private readonly IHotkeyService _hotkeyService;
+    private readonly IAudioManager audioManager;
+    private readonly IUiaScannerService uiaScannerService;
+    private readonly IProcessIdentifier processIdentifier;
+    private readonly IMappingManager mappingManager;
+    private readonly IVolumeKnobManager knobManager;
+    private readonly IDialogService dialogService;
+    private readonly IHotkeyService hotkeyService;
 
-    private CancellationTokenSource _processingCts;
-    private long _isProcessingClick = 0;
-    private bool _isDisposed = false;
+    private CancellationTokenSource processingCts;
+    private long isProcessingClick = 0;
+    private bool isDisposed = false;
 
     public TaskbarMonitor(
         IAudioManager audioManager,
@@ -38,45 +37,45 @@ public class TaskbarMonitor : ITaskbarMonitor
         IVolumeKnobManager volumeKnobManager,
         IHotkeyService hotkeyService)
     {
-        _audioManager = audioManager ?? throw new ArgumentNullException(nameof(audioManager));
-        _mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
-        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
-        _uiaScannerService = uiaScannerService ?? throw new ArgumentNullException(nameof(uiaScannerService));
-        _processIdentifier = processIdentifier ?? throw new ArgumentNullException(nameof(processIdentifier));
-        _knobManager = volumeKnobManager ?? throw new ArgumentNullException(nameof(volumeKnobManager));
-        _hotkeyService = hotkeyService ?? throw new ArgumentNullException(nameof(hotkeyService));
+        this.audioManager = audioManager ?? throw new ArgumentNullException(nameof(audioManager));
+        this.mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
+        this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        this.uiaScannerService = uiaScannerService ?? throw new ArgumentNullException(nameof(uiaScannerService));
+        this.processIdentifier = processIdentifier ?? throw new ArgumentNullException(nameof(processIdentifier));
+        knobManager = volumeKnobManager ?? throw new ArgumentNullException(nameof(volumeKnobManager));
+        this.hotkeyService = hotkeyService ?? throw new ArgumentNullException(nameof(hotkeyService));
     }
 
     public void StartMonitoring()
     {
-        if(_isDisposed) throw new ObjectDisposedException(nameof(TaskbarMonitor));
+        if(isDisposed) throw new ObjectDisposedException(nameof(TaskbarMonitor));
 
-        _hotkeyService.GlobalHotkeyPressed += OnHotkeyPressedAsync;
-        _hotkeyService.StartMonitoring();
-        _knobManager.StartCleanupTask();
+        hotkeyService.GlobalHotkeyPressed += OnHotkeyPressedAsync;
+        hotkeyService.StartMonitoring();
+        knobManager.StartCleanupTask();
     }
 
     public void StopMonitoring()
     {
-        if(_isDisposed) return;
+        if(isDisposed) return;
 
-        _processingCts?.Cancel();
-        _hotkeyService.StopMonitoring();
-        _hotkeyService.GlobalHotkeyPressed -= OnHotkeyPressedAsync;
-        _knobManager.StopCleanupTask();
-        _knobManager.HideAllKnobs();
+        processingCts?.Cancel();
+        hotkeyService.StopMonitoring();
+        hotkeyService.GlobalHotkeyPressed -= OnHotkeyPressedAsync;
+        knobManager.StopCleanupTask();
+        knobManager.HideAllKnobs();
     }
 
     private async void OnHotkeyPressedAsync(object sender, GlobalHotkeyPressedEventArgs e)
     {
-        if(_isDisposed || !_uiaScannerService.IsInitialized) return;
-        if(Interlocked.CompareExchange(ref _isProcessingClick, 1, 0) != 0) return;
+        if(isDisposed || !uiaScannerService.IsInitialized) return;
+        if(Interlocked.CompareExchange(ref isProcessingClick, 1, 0) != 0) return;
 
-        _processingCts?.Cancel();
-        _processingCts = new CancellationTokenSource();
-        CancellationToken token = _processingCts.Token;
+        processingCts?.Cancel();
+        processingCts = new CancellationTokenSource();
+        CancellationToken token = processingCts.Token;
 
-        _knobManager.HideAllKnobs();
+        knobManager.HideAllKnobs();
 
         try
         {
@@ -92,9 +91,9 @@ public class TaskbarMonitor : ITaskbarMonitor
         }
         finally
         {
-            Interlocked.Exchange(ref _isProcessingClick, 0);
-            _processingCts.Dispose();
-            _processingCts = null;
+            Interlocked.Exchange(ref isProcessingClick, 0);
+            processingCts.Dispose();
+            processingCts = null;
         }
     }
 
@@ -105,7 +104,7 @@ public class TaskbarMonitor : ITaskbarMonitor
             cancellationToken.ThrowIfCancellationRequested();
 
             var clickPoint = new Point(clickX, clickY);
-            AutomationElement clickedElement = _uiaScannerService.FindElementFromPoint(clickPoint, cancellationToken);
+            AutomationElement clickedElement = uiaScannerService.FindElementFromPoint(clickPoint, cancellationToken);
             if(clickedElement == null)
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] No UIA element found at click point.");
@@ -113,7 +112,7 @@ public class TaskbarMonitor : ITaskbarMonitor
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            AutomationElement taskbarElement = _uiaScannerService.FindTaskbarElement(clickedElement, cancellationToken);
+            AutomationElement taskbarElement = uiaScannerService.FindTaskbarElement(clickedElement, cancellationToken);
             AutomationElement targetElement = taskbarElement ?? clickedElement;
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -123,7 +122,7 @@ public class TaskbarMonitor : ITaskbarMonitor
 
 
             cancellationToken.ThrowIfCancellationRequested();
-            var identificationResult = _processIdentifier.IdentifyProcess(targetElement, extractedName, cancellationToken);
+            var identificationResult = processIdentifier.IdentifyProcess(targetElement, extractedName, cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
             if(identificationResult.Success)
@@ -151,12 +150,12 @@ public class TaskbarMonitor : ITaskbarMonitor
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        AppAudioSession session = _audioManager.GetAudioSessionForProcess(identificationResult.ProcessId);
+        AppAudioSession session = audioManager.GetAudioSessionForProcess(identificationResult.ProcessId);
 
         if(session != null)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Audio session found for PID {identificationResult.ProcessId}. Showing knob.");
-            _knobManager.ShowKnobForSession(clickX, clickY, session);
+            knobManager.ShowKnobForSession(clickX, clickY, session);
         }
         else
         {
@@ -172,7 +171,7 @@ public class TaskbarMonitor : ITaskbarMonitor
         cancellationToken.ThrowIfCancellationRequested();
         string nameToMap = (!string.IsNullOrWhiteSpace(extractedName) && extractedName != "[Error getting name]" && extractedName != "[Unknown]") ? extractedName : uiaName;
         nameToMap = nameToMap?.Trim();
-        await _mappingManager.PromptAndSaveMappingAsync(nameToMap, cancellationToken);
+        await mappingManager.PromptAndSaveMappingAsync(nameToMap, cancellationToken);
     }
 
     async Task ShowMessageBoxAsync(string message, string title, MessageBoxButton button,
@@ -182,21 +181,21 @@ public class TaskbarMonitor : ITaskbarMonitor
 
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            if(token.IsCancellationRequested || _isDisposed ||
+            if(token.IsCancellationRequested || isDisposed ||
                Application.Current == null || Application.Current.Dispatcher.HasShutdownStarted) return;
-            _dialogService.ShowMessageBox(message, title, button, icon);
+            dialogService.ShowMessageBox(message, title, button, icon);
         }, DispatcherPriority.Normal, token);
     }
 
     public void Dispose()
     {
-        if(!_isDisposed)
+        if(!isDisposed)
         {
             StopMonitoring();
-            _processingCts?.Dispose();
-            _hotkeyService?.Dispose();
-            _knobManager?.Dispose();
-            _isDisposed = true;
+            processingCts?.Dispose();
+            hotkeyService?.Dispose();
+            knobManager?.Dispose();
+            isDisposed = true;
         }
     }
 }

@@ -6,13 +6,13 @@ namespace RightClickVolume.Services;
 
 public class DialogService : IDialogService
 {
-    readonly IViewModelFactory _viewModelFactory;
+    readonly IViewModelFactory viewModelFactory;
 
-    public DialogService(IViewModelFactory viewModelFactory) => _viewModelFactory = viewModelFactory;
+    public DialogService(IViewModelFactory viewModelFactory) => this.viewModelFactory = viewModelFactory;
 
     public bool? ShowSettingsWindow()
     {
-        var viewModel = _viewModelFactory.CreateSettingsViewModel();
+        var viewModel = viewModelFactory.CreateSettingsViewModel();
         var window = new SettingsWindow
         {
             DataContext = viewModel
@@ -27,7 +27,7 @@ public class DialogService : IDialogService
 
     public (bool? DialogResult, string UiaName, string ProcessName) ShowAddMappingWindow(string uiaNameToMap = null)
     {
-        var viewModel = _viewModelFactory.CreateAddMappingViewModel(uiaNameToMap);
+        var viewModel = viewModelFactory.CreateAddMappingViewModel(uiaNameToMap);
         var window = new AddMappingWindow(uiaNameToMap) // Pass uiaNameToMap if needed for direct use or keep ViewModel only
         {
             DataContext = viewModel
@@ -49,7 +49,7 @@ public class DialogService : IDialogService
 
     public Process ShowProcessSelectorDialog()
     {
-        var viewModel = _viewModelFactory.CreateProcessSelectorViewModel();
+        var viewModel = viewModelFactory.CreateProcessSelectorViewModel();
         var dialog = new ProcessSelectorDialog()
         {
             DataContext = viewModel

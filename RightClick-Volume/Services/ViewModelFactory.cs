@@ -7,19 +7,19 @@ namespace RightClickVolume.Services;
 
 public class ViewModelFactory : IViewModelFactory
 {
-    readonly IServiceProvider _serviceProvider;
+    readonly IServiceProvider serviceProvider;
 
-    public ViewModelFactory(IServiceProvider serviceProvider) => _serviceProvider = serviceProvider;
+    public ViewModelFactory(IServiceProvider serviceProvider) => this.serviceProvider = serviceProvider;
 
-    public SettingsViewModel CreateSettingsViewModel() => _serviceProvider.GetRequiredService<SettingsViewModel>();
+    public SettingsViewModel CreateSettingsViewModel() => serviceProvider.GetRequiredService<SettingsViewModel>();
 
     public AddMappingViewModel CreateAddMappingViewModel(string initialUiaName)
     {
-        var dialogService = _serviceProvider.GetRequiredService<IDialogService>();
+        var dialogService = serviceProvider.GetRequiredService<IDialogService>();
         return new AddMappingViewModel(initialUiaName, dialogService);
     }
 
-    public ProcessSelectorViewModel CreateProcessSelectorViewModel() => _serviceProvider.GetRequiredService<ProcessSelectorViewModel>();
+    public ProcessSelectorViewModel CreateProcessSelectorViewModel() => serviceProvider.GetRequiredService<ProcessSelectorViewModel>();
 
-    public VolumeKnobViewModel CreateVolumeKnobViewModel() => _serviceProvider.GetRequiredService<VolumeKnobViewModel>();
+    public VolumeKnobViewModel CreateVolumeKnobViewModel() => serviceProvider.GetRequiredService<VolumeKnobViewModel>();
 }

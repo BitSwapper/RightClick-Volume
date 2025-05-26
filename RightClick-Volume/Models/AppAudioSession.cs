@@ -7,10 +7,10 @@ namespace RightClickVolume.Models;
 
 public class AppAudioSession : IAppAudioSession
 {
-    readonly AudioSessionControl _sessionControl;
-    readonly SimpleAudioVolume _volumeControl;
-    readonly AudioMeterInformation _meterInformation;
-    bool _isDisposed = false;
+    readonly AudioSessionControl sessionControl;
+    readonly SimpleAudioVolume volumeControl;
+    readonly AudioMeterInformation meterInformation;
+    bool isDisposed = false;
 
     public uint ProcessId { get; private set; }
     public string DisplayName { get; private set; }
@@ -19,10 +19,10 @@ public class AppAudioSession : IAppAudioSession
     {
         get
         {
-            if(_isDisposed) return 0f;
+            if(isDisposed) return 0f;
             try
             {
-                return _volumeControl?.Volume ?? 0f;
+                return volumeControl?.Volume ?? 0f;
             }
             catch(Exception ex)
             {
@@ -36,10 +36,10 @@ public class AppAudioSession : IAppAudioSession
     {
         get
         {
-            if(_isDisposed) return false;
+            if(isDisposed) return false;
             try
             {
-                return _volumeControl?.Mute ?? false;
+                return volumeControl?.Mute ?? false;
             }
             catch(Exception ex)
             {
@@ -53,10 +53,10 @@ public class AppAudioSession : IAppAudioSession
     {
         get
         {
-            if(_isDisposed) return 0f;
+            if(isDisposed) return 0f;
             try
             {
-                float peak = _meterInformation?.MasterPeakValue ?? 0f;
+                float peak = meterInformation?.MasterPeakValue ?? 0f;
                 return peak;
             }
             catch(Exception ex)
@@ -72,11 +72,11 @@ public class AppAudioSession : IAppAudioSession
         if(sessionControl == null)
             throw new ArgumentNullException(nameof(sessionControl));
 
-        _sessionControl = sessionControl;
+        this.sessionControl = sessionControl;
         try
         {
-            _volumeControl = sessionControl.SimpleAudioVolume;
-            _meterInformation = sessionControl.AudioMeterInformation;
+            volumeControl = sessionControl.SimpleAudioVolume;
+            meterInformation = sessionControl.AudioMeterInformation;
         }
         catch(Exception ex)
         {
@@ -91,10 +91,10 @@ public class AppAudioSession : IAppAudioSession
 
     public void SetVolume(float volume)
     {
-        if(_isDisposed || _volumeControl == null) return;
+        if(isDisposed || volumeControl == null) return;
         try
         {
-            _volumeControl.Volume = Math.Clamp(volume, 0f, 1f);
+            volumeControl.Volume = Math.Clamp(volume, 0f, 1f);
         }
         catch(Exception ex)
         {
@@ -104,10 +104,10 @@ public class AppAudioSession : IAppAudioSession
 
     public void SetMute(bool mute)
     {
-        if(_isDisposed || _volumeControl == null) return;
+        if(isDisposed || volumeControl == null) return;
         try
         {
-            _volumeControl.Mute = mute;
+            volumeControl.Mute = mute;
         }
         catch(Exception ex)
         {
@@ -123,13 +123,13 @@ public class AppAudioSession : IAppAudioSession
 
     protected virtual void Dispose(bool disposing)
     {
-        if(!_isDisposed)
+        if(!isDisposed)
         {
             if(disposing)
             {
-                _sessionControl?.Dispose();
+                sessionControl?.Dispose();
             }
-            _isDisposed = true;
+            isDisposed = true;
         }
     }
 
