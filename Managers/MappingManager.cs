@@ -6,23 +6,32 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
-using RightClickVolume.Properties;
+using RightClickVolume.Interfaces;
+
 
 namespace RightClickVolume.Managers;
 
-internal class MappingManager
+public class MappingManager : IMappingManager
 {
     const char UIA_PROCESS_SEPARATOR = '|';
     const char PROCESS_LIST_SEPARATOR = ';';
+    readonly IDialogService _dialogService;
+    readonly ISettingsService _settingsService;
+
+    public MappingManager(IDialogService dialogService, ISettingsService settingsService)
+    {
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+    }
 
     public Dictionary<string, List<string>> LoadManualMappings()
     {
         var mappings = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            if(Settings.Default.ManualMappings == null) return mappings;
+            if(_settingsService.ManualMappings == null) return mappings;
 
-            foreach(string mappingString in Settings.Default.ManualMappings)
+            foreach(string mappingString in _settingsService.ManualMappings)
                 TryParseAndAddMapping(mappingString, mappings);
         }
         catch { }
@@ -72,7 +81,7 @@ internal class MappingManager
         }
         catch(Exception ex)
         {
-            MessageBox.Show($"Failed to save the mapping: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogService.ShowMessageBox($"Failed to save the mapping: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
     }
@@ -101,54 +110,50 @@ internal class MappingManager
             if(kvp.Value?.Count > 0)
                 settingsCollection.Add($"{kvp.Key}{UIA_PROCESS_SEPARATOR}{string.Join(PROCESS_LIST_SEPARATOR.ToString(), kvp.Value)}");
 
-        Settings.Default.ManualMappings = settingsCollection;
-        Settings.Default.Save();
+        _settingsService.ManualMappings = settingsCollection;
+        _settingsService.Save();
     }
 
-    public async Task PromptAndSaveMappingAsync(string uiaNameToMap, CancellationToken cancellationToken)
-    {
-        string threadId = $"[BG Thread {Thread.CurrentThread.ManagedThreadId}]";
+    public async Task PromptAndSaveMappingAsync(string uiaNameToMap, CancellationToken cancellationToken) =>
         await Application.Current.Dispatcher.InvokeAsync(async () =>
         {
             if(ShouldAbortPrompt(cancellationToken))
                 return;
 
-            if(!PromptUserForMapping(uiaNameToMap, threadId))
+            if(!PromptUserForMapping(uiaNameToMap))
                 return;
 
-            ShowAddMappingDialog(uiaNameToMap, threadId);
+            ShowAddMappingDialog(uiaNameToMap);
         }, DispatcherPriority.Normal, cancellationToken);
-    }
 
     bool ShouldAbortPrompt(CancellationToken cancellationToken) => Application.Current == null || Application.Current.Dispatcher.HasShutdownStarted || cancellationToken.IsCancellationRequested;
 
-    bool PromptUserForMapping(string uiaNameToMap, string threadId)
+    bool PromptUserForMapping(string uiaNameToMap)
     {
         string promptMessage = $"Could not automatically find an audio process for the clicked item:\n\nUIA Name: '{uiaNameToMap}'\n\nDo you want to manually map this name to a specific running process?";
-        MessageBoxResult result = MessageBox.Show(promptMessage, "Manual Mapping Needed", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
+        MessageBoxResult result = _dialogService.ShowMessageBox(promptMessage, "Manual Mapping Needed", MessageBoxButton.YesNo, MessageBoxImage.Question);
         return result == MessageBoxResult.Yes;
     }
 
-    void ShowAddMappingDialog(string uiaNameToMap, string threadId)
+    void ShowAddMappingDialog(string uiaNameToMap)
     {
         try
         {
-            var addDialog = new AddMappingWindow(uiaNameToMap);
-            HandleMappingDialogResult(addDialog, threadId);
+            var (dialogResult, uiaNameResult, processNameResult) = _dialogService.ShowAddMappingWindow(uiaNameToMap);
+            HandleMappingDialogResult(dialogResult, uiaNameResult, processNameResult);
         }
         catch(Exception ex)
         {
-            MessageBox.Show($"Failed to open the mapping window: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogService.ShowMessageBox($"Failed to open the mapping window: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    void HandleMappingDialogResult(AddMappingWindow dialog, string threadId)
+    void HandleMappingDialogResult(bool? dialogResult, string uiaName, string processName)
     {
-        if(dialog.ShowDialog() != true)
+        if(dialogResult != true)
             return;
 
-        if(SaveOrUpdateManualMapping(dialog.UiaName, dialog.ProcessName))
-            MessageBox.Show($"Mapping for process '{dialog.ProcessName}' saved/updated under UIA Name:\n'{dialog.UiaName}'\n\nPlease try Ctrl+Right-clicking the item again.", "Mapping Saved/Updated", MessageBoxButton.OK, MessageBoxImage.Information);
+        if(SaveOrUpdateManualMapping(uiaName, processName))
+            _dialogService.ShowMessageBox($"Mapping for process '{processName}' saved/updated under UIA Name:\n'{uiaName}'\n\nPlease try Ctrl+Right-clicking the item again.", "Mapping Saved/Updated", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

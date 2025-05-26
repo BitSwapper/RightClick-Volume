@@ -6,24 +6,27 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Input;
 using System.Windows.Threading;
+using RightClickVolume.Interfaces;
 using RightClickVolume.Models;
 using RightClickVolume.Native;
-using RightClickVolume.Properties;
 
 namespace RightClickVolume.Managers;
 
-public class TaskbarMonitor : IDisposable
+public class TaskbarMonitor : ITaskbarMonitor
 {
     const string ERROR_TITLE = "Error";
     const string AUDIO_SESSION_TITLE = "Audio Session Not Found";
 
     readonly uint currentProcessId;
-    readonly AudioManager audioManager;
+    readonly IAudioManager audioManager;
     readonly WindowsHooks windowsHooks;
     readonly UiaTaskbarScanner uiaScanner;
     readonly ProcessIdentifier processIdentifier;
-    readonly MappingManager mappingManager;
+    readonly IMappingManager mappingManager;
     readonly VolumeKnobManager knobManager;
+    readonly IDialogService dialogService;
+    readonly ISettingsService settingsService;
+
 
     CancellationTokenSource monitorCts;
     long isProcessingClick = 0;
@@ -33,19 +36,25 @@ public class TaskbarMonitor : IDisposable
     bool reqShift;
     bool reqWin;
 
-    public TaskbarMonitor(AudioManager audioManager)
+    public TaskbarMonitor(IAudioManager audioManager, IMappingManager mappingManager, IDialogService dialogService, ISettingsService settingsService)
     {
         try { currentProcessId = (uint)Process.GetCurrentProcess().Id; }
         catch { }
 
-        LoadHotkeySettings();
         this.audioManager = audioManager ?? throw new ArgumentNullException(nameof(audioManager));
+        this.mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
+        this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+
+
         windowsHooks = new WindowsHooks();
         uiaScanner = new UiaTaskbarScanner();
-        mappingManager = new MappingManager();
-        processIdentifier = new ProcessIdentifier(currentProcessId, mappingManager);
+        processIdentifier = new ProcessIdentifier(currentProcessId, this.mappingManager);
         knobManager = new VolumeKnobManager();
         windowsHooks.RightMouseClick += OnRightMouseClick;
+
+        LoadHotkeySettings();
+        this.settingsService.PropertyChanged += (s, e) => LoadHotkeySettings();
     }
 
     public void StartMonitoring()
@@ -69,17 +78,16 @@ public class TaskbarMonitor : IDisposable
 
     void LoadHotkeySettings()
     {
-        reqCtrl = Settings.Default.Hotkey_Ctrl;
-        reqAlt = Settings.Default.Hotkey_Alt;
-        reqShift = Settings.Default.Hotkey_Shift;
-        reqWin = Settings.Default.Hotkey_Win;
+        reqCtrl = settingsService.Hotkey_Ctrl;
+        reqAlt = settingsService.Hotkey_Alt;
+        reqShift = settingsService.Hotkey_Shift;
+        reqWin = settingsService.Hotkey_Win;
     }
 
     void OnRightMouseClick(object sender, MouseHookEventArgs e)
     {
         if(isDisposed || !uiaScanner.IsInitialized) return;
 
-        LoadHotkeySettings();
 
         if(!CheckHotkeyModifiers()) return;
         if(Interlocked.CompareExchange(ref isProcessingClick, 1, 0) != 0) return;
@@ -126,7 +134,7 @@ public class TaskbarMonitor : IDisposable
             var identificationResult = processIdentifier.IdentifyProcess(targetElement, extractedName, cancellationToken);
 
             if(identificationResult.Success)
-                HandleSuccessfulIdentification(clickX, clickY, identificationResult, cancellationToken);
+                await HandleSuccessfulIdentification(clickX, clickY, identificationResult, cancellationToken);
             else
                 await HandleFailedIdentification(uiaName, extractedName, cancellationToken);
         }
@@ -173,7 +181,7 @@ public class TaskbarMonitor : IDisposable
             if(token.IsCancellationRequested || isDisposed ||
                Application.Current == null || Application.Current.Dispatcher.HasShutdownStarted) return;
 
-            MessageBox.Show(message, title, button, icon);
+            dialogService.ShowMessageBox(message, title, button, icon);
         }, DispatcherPriority.Normal, token);
     }
 

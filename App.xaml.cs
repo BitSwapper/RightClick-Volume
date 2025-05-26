@@ -3,26 +3,61 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
-using Hardcodet.Wpf.TaskbarNotification;
+using Hardcodet.Wpf.TaskbarNotification; // Assuming this is your TaskbarIcon library
+using Microsoft.Extensions.DependencyInjection; // For DI
+using RightClickVolume.Interfaces;
 using RightClickVolume.Managers;
 using RightClickVolume.Properties;
+using RightClickVolume.Services; // For ViewModelFactory and DialogService
+using RightClickVolume.ViewModels; // For ViewModels if needed directly (less common here)
 
 
 namespace RightClickVolume;
 
 public partial class App : Application
 {
-    TaskbarIcon notifyIcon;
-    TaskbarMonitor taskbarMonitor;
-    AudioManager audioManager;
-    SettingsWindow settingsWindow = null;
+    public static IServiceProvider ServiceProvider { get; private set; }
+
+    TaskbarIcon _notifyIcon; // Using Hardcodet.Wpf.TaskbarNotification
+    ITaskbarMonitor _taskbarMonitor;
+    IAudioManager _audioManager;
+    ISettingsService _settingsService;
+    IDialogService _dialogService;
+
+    SettingsWindow _currentSettingsWindow = null; // To keep track of the settings window instance
+
+    public App()
+    {
+        var serviceCollection = new ServiceCollection();
+        ConfigureServices(serviceCollection);
+        ServiceProvider = serviceCollection.BuildServiceProvider();
+    }
+
+    void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IAudioManager, AudioManager>();
+        services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<IMappingManager, MappingManager>();
+        services.AddSingleton<ITaskbarMonitor, TaskbarMonitor>();
+        services.AddSingleton<IViewModelFactory, ViewModelFactory>();
+
+        services.AddTransient<SettingsViewModel>();
+        services.AddTransient<AddMappingViewModel>();
+        services.AddTransient<ProcessSelectorViewModel>();
+        services.AddTransient<VolumeKnobViewModel>();
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         Debug.AutoFlush = true;
 
-        if(!InitializeAudioManager() || !InitializeTaskbarMonitor())
+        _settingsService = ServiceProvider.GetRequiredService<ISettingsService>();
+        _dialogService = ServiceProvider.GetRequiredService<IDialogService>();
+
+
+        if(!InitializeAudioManagerViaDI() || !InitializeTaskbarMonitorViaDI())
         {
             Shutdown();
             return;
@@ -31,12 +66,12 @@ public partial class App : Application
         CreateSystemTrayIcon();
     }
 
-    bool InitializeAudioManager()
+    bool InitializeAudioManagerViaDI()
     {
         try
         {
-            audioManager = new AudioManager();
-            return true;
+            _audioManager = ServiceProvider.GetRequiredService<IAudioManager>();
+            return _audioManager != null;
         }
         catch(Exception ex)
         {
@@ -45,17 +80,17 @@ public partial class App : Application
         }
     }
 
-    bool InitializeTaskbarMonitor()
+    bool InitializeTaskbarMonitorViaDI()
     {
         try
         {
-            taskbarMonitor = new TaskbarMonitor(audioManager);
-            taskbarMonitor.StartMonitoring();
+            _taskbarMonitor = ServiceProvider.GetRequiredService<ITaskbarMonitor>();
+            _taskbarMonitor.StartMonitoring();
             return true;
         }
         catch(Exception ex)
         {
-            audioManager?.Dispose();
+            _audioManager?.Dispose();
             MessageBox.Show($"Fatal Error Initializing Taskbar Monitor:\n{ex.Message}\n\nApplication will exit.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
@@ -65,7 +100,7 @@ public partial class App : Application
     {
         try
         {
-            notifyIcon = new TaskbarIcon();
+            _notifyIcon = new TaskbarIcon();
             SetTaskbarIconImage();
             ConfigureContextMenu();
             ShowFirstRunNotification();
@@ -80,11 +115,13 @@ public partial class App : Application
     {
         try
         {
-            notifyIcon.IconSource = new BitmapImage(new Uri("pack://application:,,,/Resources/AppIcon.ico"));
+            _notifyIcon.IconSource = new BitmapImage(new Uri("pack://application:,,,/Resources/AppIcon.ico"));
         }
-        catch { }
-
-        notifyIcon.ToolTipText = "RightClick Volume";
+        catch(Exception ex)
+        {
+            Debug.WriteLine($"Error setting taskbar icon image: {ex.Message}");
+        }
+        _notifyIcon.ToolTipText = StaticVals.AppName;
     }
 
     void ConfigureContextMenu()
@@ -104,15 +141,15 @@ public partial class App : Application
         contextMenu.Items.Add(new Separator());
         contextMenu.Items.Add(exitMenuItem);
 
-        notifyIcon.ContextMenu = contextMenu;
+        _notifyIcon.ContextMenu = contextMenu;
     }
 
     void ShowFirstRunNotification()
     {
-        if(Settings.Default.IsFirstRunEver)
+        if(_settingsService.LaunchOnStartup && Settings.Default.IsFirstRunEver) // Assuming IsFirstRunEver is still in Settings.Default or move to ISettingsService
         {
-            notifyIcon.ShowBalloonTip("RightClick Volume", "The application is now running in the background.", BalloonIcon.Info);
-            Settings.Default.IsFirstRunEver = false;
+            _notifyIcon.ShowBalloonTip(StaticVals.AppName, "The application is now running in the background.", BalloonIcon.Info);
+            Settings.Default.IsFirstRunEver = false; // Keep this if it's a one-time flag not part of ISettingsService general props
             Settings.Default.Save();
         }
     }
@@ -122,7 +159,6 @@ public partial class App : Application
     void OpenLink(object sender, RoutedEventArgs e)
     {
         string url = "https://github.com/BitSwapper";
-
         try
         {
             var psi = new ProcessStartInfo
@@ -130,7 +166,6 @@ public partial class App : Application
                 FileName = url,
                 UseShellExecute = true
             };
-
             Process.Start(psi);
         }
         catch(Exception ex)
@@ -138,20 +173,27 @@ public partial class App : Application
             MessageBox.Show($"Could not open the link: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
+
     void OpenSettingsWindow()
     {
-        if(settingsWindow != null && settingsWindow.IsLoaded)
+        if(_currentSettingsWindow != null && _currentSettingsWindow.IsLoaded)
         {
-            settingsWindow.Activate();
+            _currentSettingsWindow.Activate();
             return;
         }
 
-        settingsWindow = new SettingsWindow();
-        settingsWindow.ShowDialog();
-        settingsWindow.Activate();
+        if(_dialogService != null)
+        {
+            _dialogService.ShowSettingsWindow();
+        }
+        else
+        {
+            MessageBox.Show("Dialog service not available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
-    void ExitMenuItem_Click(object sender, RoutedEventArgs e) => Shutdown();
+
+    void ExitMenuItem_Click(object sender, RoutedEventArgs e) => ShutdownApplication();
 
     protected override void OnExit(ExitEventArgs e)
     {
@@ -159,15 +201,26 @@ public partial class App : Application
         base.OnExit(e);
     }
 
+    void ShutdownApplication()
+    {
+        CleanupResources();
+        Shutdown();
+    }
+
+
     void CleanupResources()
     {
-        try { settingsWindow?.Close(); } catch { }
+        try { _currentSettingsWindow?.Close(); } catch { }
+        _currentSettingsWindow = null;
 
-        notifyIcon?.Dispose();
+        _notifyIcon?.Dispose();
+        _notifyIcon = null;
 
-        taskbarMonitor?.StopMonitoring();
-        (taskbarMonitor as IDisposable)?.Dispose();
+        _taskbarMonitor?.StopMonitoring();
+        _taskbarMonitor?.Dispose(); // ITaskbarMonitor interface inherits IDisposable
+        _taskbarMonitor = null;
 
-        audioManager?.Dispose();
+        _audioManager?.Dispose(); // IAudioManager interface inherits IDisposable
+        _audioManager = null;
     }
 }

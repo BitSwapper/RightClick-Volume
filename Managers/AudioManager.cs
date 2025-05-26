@@ -5,11 +5,12 @@ using System.IO;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
+using RightClickVolume.Interfaces;
 using RightClickVolume.Models;
 
 namespace RightClickVolume.Managers;
 
-public class AudioManager : IDisposable
+public class AudioManager : IAudioManager
 {
     MMDeviceEnumerator deviceEnumerator;
     MMDevice defaultPlaybackDevice;
@@ -133,7 +134,10 @@ public class AudioManager : IDisposable
                 }
                 finally
                 {
-                    session?.Dispose();
+                    if(session != null && session.GetProcessID != targetProcessId)
+                    {
+                        session.Dispose();
+                    }
                 }
             }
         }
@@ -163,11 +167,18 @@ public class AudioManager : IDisposable
                 {
                     session = sessionEnumerator[i];
                     if(session.State == AudioSessionState.AudioSessionStateExpired)
+                    {
+                        session.Dispose();
                         continue;
+                    }
 
                     uint processId = session.GetProcessID;
                     if(processId == 0)
+                    {
+                        session.Dispose();
                         continue;
+                    }
+
 
                     string processName = GetProcessNameWithCaching(processId);
                     string displayName = session.DisplayName;
@@ -185,9 +196,6 @@ public class AudioManager : IDisposable
                 catch(Exception ex)
                 {
                     Debug.WriteLine($"Error processing session in GetAllAudioSessions: {ex.Message}");
-                }
-                finally
-                {
                     session?.Dispose();
                 }
             }
@@ -245,6 +253,7 @@ public class AudioManager : IDisposable
         try
         {
             defaultPlaybackDevice?.Dispose();
+            defaultPlaybackDevice = null;
             defaultPlaybackDevice = deviceEnumerator?.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         }
         catch(Exception ex)

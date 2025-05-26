@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Automation;
+using RightClickVolume.Interfaces;
 using RightClickVolume.Native;
 
 namespace RightClickVolume.Managers;
@@ -13,9 +14,9 @@ namespace RightClickVolume.Managers;
 internal class ProcessIdentifier
 {
     readonly uint currentProcessId;
-    readonly MappingManager mappingManager;
+    readonly IMappingManager mappingManager;
 
-    public ProcessIdentifier(uint currentProcessId, MappingManager mappingManager)
+    public ProcessIdentifier(uint currentProcessId, IMappingManager mappingManager)
     {
         this.currentProcessId = currentProcessId;
         this.mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));

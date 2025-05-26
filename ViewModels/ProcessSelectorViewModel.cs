@@ -1,5 +1,4 @@
-﻿// ProcessSelectorViewModel.cs
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
