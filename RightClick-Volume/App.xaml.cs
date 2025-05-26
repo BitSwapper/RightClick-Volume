@@ -3,13 +3,14 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
-using Hardcodet.Wpf.TaskbarNotification; // Assuming this is your TaskbarIcon library
-using Microsoft.Extensions.DependencyInjection; // For DI
+using Hardcodet.Wpf.TaskbarNotification;
 using RightClickVolume.Interfaces;
 using RightClickVolume.Managers;
+using RightClickVolume.Native;
 using RightClickVolume.Properties;
-using RightClickVolume.Services; // For ViewModelFactory and DialogService
-using RightClickVolume.ViewModels; // For ViewModels if needed directly (less common here)
+using RightClickVolume.Services;
+using RightClickVolume.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 
 namespace RightClickVolume;
@@ -18,13 +19,12 @@ public partial class App : Application
 {
     public static IServiceProvider ServiceProvider { get; private set; }
 
-    TaskbarIcon _notifyIcon; // Using Hardcodet.Wpf.TaskbarNotification
-    ITaskbarMonitor _taskbarMonitor;
-    IAudioManager _audioManager;
-    ISettingsService _settingsService;
-    IDialogService _dialogService;
+    private TaskbarIcon _notifyIcon;
+    private ITaskbarMonitor _taskbarMonitor;
+    private IAudioManager _audioManager;
+    private ISettingsService _settingsService;
+    private IDialogService _dialogService;
 
-    SettingsWindow _currentSettingsWindow = null; // To keep track of the settings window instance
 
     public App()
     {
@@ -33,12 +33,17 @@ public partial class App : Application
         ServiceProvider = serviceCollection.BuildServiceProvider();
     }
 
-    void ConfigureServices(IServiceCollection services)
+    private void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IAudioManager, AudioManager>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IMappingManager, MappingManager>();
+
+        services.AddSingleton<IWindowsHookService, WindowsHooks>();
+        services.AddSingleton<IUiaScannerService, UiaTaskbarScanner>();
+        services.AddSingleton<IVolumeKnobManager, VolumeKnobManager>();
+
         services.AddSingleton<ITaskbarMonitor, TaskbarMonitor>();
         services.AddSingleton<IViewModelFactory, ViewModelFactory>();
 
@@ -55,29 +60,15 @@ public partial class App : Application
 
         _settingsService = ServiceProvider.GetRequiredService<ISettingsService>();
         _dialogService = ServiceProvider.GetRequiredService<IDialogService>();
+        _audioManager = ServiceProvider.GetRequiredService<IAudioManager>();
 
-
-        if(!InitializeAudioManagerViaDI() || !InitializeTaskbarMonitorViaDI())
+        if(!InitializeTaskbarMonitorViaDI())
         {
             Shutdown();
             return;
         }
 
         CreateSystemTrayIcon();
-    }
-
-    bool InitializeAudioManagerViaDI()
-    {
-        try
-        {
-            _audioManager = ServiceProvider.GetRequiredService<IAudioManager>();
-            return _audioManager != null;
-        }
-        catch(Exception ex)
-        {
-            MessageBox.Show($"Fatal Error Initializing Audio Manager:\n{ex.Message}\n\nApplication will exit.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            return false;
-        }
     }
 
     bool InitializeTaskbarMonitorViaDI()
@@ -146,15 +137,17 @@ public partial class App : Application
 
     void ShowFirstRunNotification()
     {
-        if(_settingsService.LaunchOnStartup && Settings.Default.IsFirstRunEver) // Assuming IsFirstRunEver is still in Settings.Default or move to ISettingsService
+        if(Settings.Default.IsFirstRunEver)
         {
-            _notifyIcon.ShowBalloonTip(StaticVals.AppName, "The application is now running in the background.", BalloonIcon.Info);
-            Settings.Default.IsFirstRunEver = false; // Keep this if it's a one-time flag not part of ISettingsService general props
+            Settings.Default.IsFirstRunEver = false;
             Settings.Default.Save();
         }
     }
 
-    void SettingsMenuItem_Click(object sender, RoutedEventArgs e) => OpenSettingsWindow();
+    void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        OpenSettingsWindow();
+    }
 
     void OpenLink(object sender, RoutedEventArgs e)
     {
@@ -176,12 +169,6 @@ public partial class App : Application
 
     void OpenSettingsWindow()
     {
-        if(_currentSettingsWindow != null && _currentSettingsWindow.IsLoaded)
-        {
-            _currentSettingsWindow.Activate();
-            return;
-        }
-
         if(_dialogService != null)
         {
             _dialogService.ShowSettingsWindow();
@@ -192,8 +179,10 @@ public partial class App : Application
         }
     }
 
-
-    void ExitMenuItem_Click(object sender, RoutedEventArgs e) => ShutdownApplication();
+    void ExitMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ShutdownApplication();
+    }
 
     protected override void OnExit(ExitEventArgs e)
     {
@@ -201,26 +190,22 @@ public partial class App : Application
         base.OnExit(e);
     }
 
-    void ShutdownApplication()
+    private void ShutdownApplication()
     {
         CleanupResources();
         Shutdown();
     }
 
-
     void CleanupResources()
     {
-        try { _currentSettingsWindow?.Close(); } catch { }
-        _currentSettingsWindow = null;
-
         _notifyIcon?.Dispose();
         _notifyIcon = null;
 
         _taskbarMonitor?.StopMonitoring();
-        _taskbarMonitor?.Dispose(); // ITaskbarMonitor interface inherits IDisposable
+        _taskbarMonitor?.Dispose();
         _taskbarMonitor = null;
 
-        _audioManager?.Dispose(); // IAudioManager interface inherits IDisposable
+        _audioManager?.Dispose();
         _audioManager = null;
     }
 }

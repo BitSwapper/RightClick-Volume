@@ -6,12 +6,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Threading;
+using RightClickVolume.Interfaces;
 using RightClickVolume.Models;
 using Application = System.Windows.Application;
 
 namespace RightClickVolume.Managers;
 
-internal class VolumeKnobManager : IDisposable
+internal class VolumeKnobManager : IVolumeKnobManager
 {
     const int OffsetX = 140;
     const int OffsetY = -305;
@@ -51,15 +52,17 @@ internal class VolumeKnobManager : IDisposable
             VolumeKnob knob = null;
             try
             {
-                knob = new();
+                knob = new VolumeKnob();
                 knob.Closed += OnKnobClosed;
 
                 lock(_lock) activeKnobs[sessionKey] = knob;
                 knob.ShowAt(finalX, finalY, session);
                 AdjustKnobPositionIfNeeded(knob, finalX, finalY, screenBounds);
+
             }
             catch(Exception ex)
             {
+                Debug.WriteLine($"Error showing knob for session {session.DisplayName}: {ex.Message}");
                 if(knob != null)
                 {
                     lock(_lock) activeKnobs.Remove(sessionKey);
@@ -72,7 +75,31 @@ internal class VolumeKnobManager : IDisposable
 
     void AdjustKnobPositionIfNeeded(VolumeKnob knob, int finalX, int finalY, System.Drawing.Rectangle screenBounds)
     {
-        if(knob.ActualWidth <= 0 || knob.ActualHeight <= 0) return;
+        if(knob.ActualWidth <= 0 || knob.ActualHeight <= 0)
+        {
+            knob.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                if(knob.IsLoaded && (knob.ActualWidth > 0 && knob.ActualHeight > 0))
+                {
+                    int currentFinalX = (int)knob.Left;
+                    int currentFinalY = (int)knob.Top;
+
+                    if(currentFinalX + knob.ActualWidth > screenBounds.X + screenBounds.Width)
+                    {
+                        currentFinalX = screenBounds.X + screenBounds.Width - (int)knob.ActualWidth;
+                        knob.Left = currentFinalX;
+                    }
+
+                    if(currentFinalY + knob.ActualHeight > screenBounds.Y + screenBounds.Height)
+                    {
+                        currentFinalY = screenBounds.Y + screenBounds.Height - (int)knob.ActualHeight;
+                        knob.Top = currentFinalY;
+                    }
+                }
+            }));
+            return;
+        }
+
 
         if(finalX + knob.ActualWidth > screenBounds.X + screenBounds.Width)
         {
@@ -87,15 +114,36 @@ internal class VolumeKnobManager : IDisposable
         }
     }
 
+
     void OnKnobClosed(object sender, EventArgs e)
     {
-        if(sender is VolumeKnob knob && knob.DataContext is AppAudioSession session)
-            Application.Current?.Dispatcher.InvokeAsync(() =>
-            {
-                lock(_lock) activeKnobs.Remove(new IntPtr(session.ProcessId));
-            }, DispatcherPriority.Input);
+        if(sender is VolumeKnob knob && knob.DataContext is ViewModels.VolumeKnobViewModel vm)
+        {
+            var sessionDisplayName = vm.GetSessionDisplayName();
+            AppAudioSession sessionToRemove = null;
 
-        if(sender is VolumeKnob closedKnob) closedKnob.Closed -= OnKnobClosed;
+            IntPtr keyToRemove = IntPtr.Zero;
+            lock(_lock)
+            {
+                foreach(var pair in activeKnobs)
+                {
+                    if(pair.Value == knob)
+                    {
+                        keyToRemove = pair.Key;
+                        break;
+                    }
+                }
+                if(keyToRemove != IntPtr.Zero)
+                {
+                    activeKnobs.Remove(keyToRemove);
+                }
+            }
+        }
+
+        if(sender is VolumeKnob closedKnob)
+        {
+            closedKnob.Closed -= OnKnobClosed;
+        }
     }
 
     public void HideAllKnobs()
@@ -110,24 +158,49 @@ internal class VolumeKnobManager : IDisposable
         if(!Application.Current.Dispatcher.CheckAccess()) { Application.Current.Dispatcher.BeginInvoke(HideAllKnobsInternal, DispatcherPriority.Normal); return; }
 
         List<IntPtr> keysToRemove;
-        lock(_lock) keysToRemove = activeKnobs.Keys.ToList();
+        lock(_lock)
+        {
+            keysToRemove = activeKnobs.Keys.ToList();
+        }
+
 
         if(keysToRemove.Count == 0) return;
 
         foreach(var key in keysToRemove)
         {
             VolumeKnob knob;
-            lock(_lock) activeKnobs.TryGetValue(key, out knob);
-
-            if(knob != null)
+            bool found;
+            lock(_lock)
             {
-                try { if(knob.IsLoaded && knob.IsVisible) knob.Hide(); }
-                catch { }
-                finally { lock(_lock) activeKnobs.Remove(key); }
+                found = activeKnobs.TryGetValue(key, out knob);
             }
-            else lock(_lock) activeKnobs.Remove(key);
+
+
+            if(found && knob != null)
+            {
+                try
+                {
+                    if(knob.IsLoaded && knob.IsVisible)
+                    {
+                        knob.Hide();
+                    }
+                }
+                catch(Exception ex)
+                {
+                    Debug.WriteLine($"Error hiding knob: {ex.Message}");
+                }
+                finally
+                {
+                    lock(_lock) { activeKnobs.Remove(key); }
+                }
+            }
+            else
+            {
+                lock(_lock) { activeKnobs.Remove(key); }
+            }
         }
     }
+
 
     public void StartCleanupTask()
     {
@@ -159,8 +232,12 @@ internal class VolumeKnobManager : IDisposable
                     if(isDisposed || Application.Current == null || Application.Current.Dispatcher.HasShutdownStarted || cancellationToken.IsCancellationRequested) return;
 
                     List<IntPtr> keysToCheck;
-                    lock(_lock) keysToCheck = activeKnobs.Keys.ToList();
+                    lock(_lock)
+                    {
+                        keysToCheck = activeKnobs.Keys.ToList();
+                    }
                     if(keysToCheck.Count == 0) return;
+
 
                     foreach(IntPtr key in keysToCheck)
                     {
@@ -169,21 +246,42 @@ internal class VolumeKnobManager : IDisposable
                         if(CheckProcessExists(pid)) continue;
 
                         VolumeKnob knob;
-                        lock(_lock) activeKnobs.TryGetValue(key, out knob);
-
-                        if(knob != null)
+                        bool found;
+                        lock(_lock)
                         {
-                            try { if(knob.IsLoaded && knob.IsVisible) knob.Hide(); }
-                            catch { }
-                            finally { lock(_lock) activeKnobs.Remove(key); }
+                            found = activeKnobs.TryGetValue(key, out knob);
                         }
-                        else lock(_lock) activeKnobs.Remove(key);
+
+
+                        if(found && knob != null)
+                        {
+                            try
+                            {
+                                if(knob.IsLoaded && knob.IsVisible)
+                                {
+                                    knob.Hide();
+                                }
+                            }
+                            catch(Exception ex)
+                            {
+                                Debug.WriteLine($"Error hiding knob during cleanup: {ex.Message}");
+                            }
+                            finally
+                            {
+                                lock(_lock) { activeKnobs.Remove(key); }
+                            }
+                        }
+                        else
+                        {
+                            lock(_lock) { activeKnobs.Remove(key); }
+                        }
                     }
                 }, DispatcherPriority.Background, cancellationToken);
             }
             catch(OperationCanceledException) { break; }
             catch(Exception ex)
             {
+                Debug.WriteLine($"Error in VolumeKnobManager cleanup loop: {ex.Message}");
                 try { await Task.Delay(TimeSpan.FromSeconds(120), cancellationToken); }
                 catch(OperationCanceledException) { break; }
             }
@@ -192,7 +290,11 @@ internal class VolumeKnobManager : IDisposable
 
     bool CheckProcessExists(uint pid)
     {
-        try { using Process process = Process.GetProcessById((int)pid); return !process.HasExited; }
+        try
+        {
+            using Process process = Process.GetProcessById((int)pid);
+            return process != null && !process.HasExited;
+        }
         catch(ArgumentException) { return false; }
         catch(InvalidOperationException) { return false; }
         catch(System.ComponentModel.Win32Exception ex) when(ex.NativeErrorCode == 5) { return true; }
@@ -209,7 +311,10 @@ internal class VolumeKnobManager : IDisposable
         {
             StopCleanupTask();
             HideAllKnobs();
-            lock(_lock) activeKnobs.Clear();
+            lock(_lock)
+            {
+                activeKnobs.Clear();
+            }
         }
         isDisposed = true;
     }

@@ -10,6 +10,7 @@ using RightClickVolume.Interfaces;
 using RightClickVolume.Models;
 using RightClickVolume.Native;
 
+
 namespace RightClickVolume.Managers;
 
 public class TaskbarMonitor : ITaskbarMonitor
@@ -18,15 +19,14 @@ public class TaskbarMonitor : ITaskbarMonitor
     const string AUDIO_SESSION_TITLE = "Audio Session Not Found";
 
     readonly uint currentProcessId;
-    readonly IAudioManager audioManager;
-    readonly WindowsHooks windowsHooks;
-    readonly UiaTaskbarScanner uiaScanner;
-    readonly ProcessIdentifier processIdentifier;
-    readonly IMappingManager mappingManager;
-    readonly VolumeKnobManager knobManager;
-    readonly IDialogService dialogService;
-    readonly ISettingsService settingsService;
-
+    readonly IAudioManager _audioManager;
+    readonly IWindowsHookService _windowsHookService;
+    readonly IUiaScannerService _uiaScannerService;
+    readonly ProcessIdentifier _processIdentifier;
+    readonly IMappingManager _mappingManager;
+    readonly IVolumeKnobManager _knobManager;
+    private readonly IDialogService _dialogService;
+    private readonly ISettingsService _settingsService;
 
     CancellationTokenSource monitorCts;
     long isProcessingClick = 0;
@@ -36,58 +36,72 @@ public class TaskbarMonitor : ITaskbarMonitor
     bool reqShift;
     bool reqWin;
 
-    public TaskbarMonitor(IAudioManager audioManager, IMappingManager mappingManager, IDialogService dialogService, ISettingsService settingsService)
+    public TaskbarMonitor(
+        IAudioManager audioManager,
+        IMappingManager mappingManager,
+        IDialogService dialogService,
+        ISettingsService settingsService,
+        IWindowsHookService windowsHookService,
+        IUiaScannerService uiaScannerService,
+        IVolumeKnobManager volumeKnobManager)
     {
         try { currentProcessId = (uint)Process.GetCurrentProcess().Id; }
         catch { }
 
-        this.audioManager = audioManager ?? throw new ArgumentNullException(nameof(audioManager));
-        this.mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
-        this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
-        this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _audioManager = audioManager ?? throw new ArgumentNullException(nameof(audioManager));
+        _mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _windowsHookService = windowsHookService ?? throw new ArgumentNullException(nameof(windowsHookService));
+        _uiaScannerService = uiaScannerService ?? throw new ArgumentNullException(nameof(uiaScannerService));
+        _knobManager = volumeKnobManager ?? throw new ArgumentNullException(nameof(volumeKnobManager));
 
+        _processIdentifier = new ProcessIdentifier(currentProcessId, _mappingManager);
 
-        windowsHooks = new WindowsHooks();
-        uiaScanner = new UiaTaskbarScanner();
-        processIdentifier = new ProcessIdentifier(currentProcessId, this.mappingManager);
-        knobManager = new VolumeKnobManager();
-        windowsHooks.RightMouseClick += OnRightMouseClick;
+        _windowsHookService.RightMouseClick += OnRightMouseClick;
 
         LoadHotkeySettings();
-        this.settingsService.PropertyChanged += (s, e) => LoadHotkeySettings();
+        _settingsService.PropertyChanged += (s, e) => {
+            if(e.PropertyName == nameof(ISettingsService.Hotkey_Alt) ||
+                e.PropertyName == nameof(ISettingsService.Hotkey_Ctrl) ||
+                e.PropertyName == nameof(ISettingsService.Hotkey_Shift) ||
+                e.PropertyName == nameof(ISettingsService.Hotkey_Win))
+            {
+                LoadHotkeySettings();
+            }
+        };
     }
 
     public void StartMonitoring()
     {
         if(isDisposed) throw new ObjectDisposedException(nameof(TaskbarMonitor));
-        if(!uiaScanner.IsInitialized) return;
+        if(!_uiaScannerService.IsInitialized) return;
 
         monitorCts = new CancellationTokenSource();
-        windowsHooks.InstallMouseHook();
-        knobManager.StartCleanupTask();
+        _windowsHookService.InstallMouseHook();
+        _knobManager.StartCleanupTask();
     }
 
     public void StopMonitoring()
     {
         if(isDisposed) return;
-        windowsHooks.UninstallMouseHook();
+        _windowsHookService.UninstallMouseHook();
         monitorCts?.Cancel();
-        knobManager.StopCleanupTask();
-        knobManager.HideAllKnobs();
+        _knobManager.StopCleanupTask();
+        _knobManager.HideAllKnobs();
     }
 
     void LoadHotkeySettings()
     {
-        reqCtrl = settingsService.Hotkey_Ctrl;
-        reqAlt = settingsService.Hotkey_Alt;
-        reqShift = settingsService.Hotkey_Shift;
-        reqWin = settingsService.Hotkey_Win;
+        reqCtrl = _settingsService.Hotkey_Ctrl;
+        reqAlt = _settingsService.Hotkey_Alt;
+        reqShift = _settingsService.Hotkey_Shift;
+        reqWin = _settingsService.Hotkey_Win;
     }
 
     void OnRightMouseClick(object sender, MouseHookEventArgs e)
     {
-        if(isDisposed || !uiaScanner.IsInitialized) return;
-
+        if(isDisposed || !_uiaScannerService.IsInitialized) return;
 
         if(!CheckHotkeyModifiers()) return;
         if(Interlocked.CompareExchange(ref isProcessingClick, 1, 0) != 0) return;
@@ -95,7 +109,7 @@ public class TaskbarMonitor : ITaskbarMonitor
         int clickX = e.X;
         int clickY = e.Y;
 
-        knobManager.HideAllKnobs();
+        _knobManager.HideAllKnobs();
 
         CancellationToken token = monitorCts?.Token ?? CancellationToken.None;
         Task.Run(async () => await ProcessRightClickAsync(clickX, clickY, token), token);
@@ -121,17 +135,17 @@ public class TaskbarMonitor : ITaskbarMonitor
             cancellationToken.ThrowIfCancellationRequested();
 
             var clickPoint = new Point(clickX, clickY);
-            AutomationElement clickedElement = uiaScanner.FindElementFromPoint(clickPoint, cancellationToken);
+            AutomationElement clickedElement = _uiaScannerService.FindElementFromPoint(clickPoint, cancellationToken);
             if(clickedElement == null)
                 return;
 
-            AutomationElement taskbarElement = uiaScanner.FindTaskbarElement(clickedElement, cancellationToken);
+            AutomationElement taskbarElement = _uiaScannerService.FindTaskbarElement(clickedElement, cancellationToken);
             AutomationElement targetElement = taskbarElement ?? clickedElement;
 
             string uiaName = UiaHelper.GetElementNameSafe(targetElement);
             string extractedName = UiaHelper.ExtractAppNameFromTaskbarUiaName(uiaName);
 
-            var identificationResult = processIdentifier.IdentifyProcess(targetElement, extractedName, cancellationToken);
+            var identificationResult = _processIdentifier.IdentifyProcess(targetElement, extractedName, cancellationToken);
 
             if(identificationResult.Success)
                 await HandleSuccessfulIdentification(clickX, clickY, identificationResult, cancellationToken);
@@ -152,13 +166,13 @@ public class TaskbarMonitor : ITaskbarMonitor
     async Task HandleSuccessfulIdentification(int clickX, int clickY, ProcessIdentifier.IdentificationResult identificationResult,
         CancellationToken cancellationToken)
     {
-        AppAudioSession session = audioManager.GetAudioSessionForProcess(identificationResult.ProcessId);
+        AppAudioSession session = _audioManager.GetAudioSessionForProcess(identificationResult.ProcessId);
 
         if(session != null)
-            knobManager.ShowKnobForSession(clickX, clickY, session);
+            _knobManager.ShowKnobForSession(clickX, clickY, session);
         else
         {
-            string noSessionMessage = $"Found target process '{identificationResult.ApplicationName}' " + $"(PID {identificationResult.ProcessId}, Method: {identificationResult.Method}), " +  $"but it does not appear to have an active audio session.\n\nVolume knob cannot be shown.";
+            string noSessionMessage = $"Found target process '{identificationResult.ApplicationName}' " + $"(PID {identificationResult.ProcessId}, Method: {identificationResult.Method}), " + $"but it does not appear to have an active audio session.\n\nVolume knob cannot be shown.";
             await ShowMessageBoxAsync(noSessionMessage, AUDIO_SESSION_TITLE,
                 MessageBoxButton.OK, MessageBoxImage.Information, cancellationToken);
         }
@@ -168,7 +182,7 @@ public class TaskbarMonitor : ITaskbarMonitor
     {
         string nameToMap = (!string.IsNullOrWhiteSpace(extractedName) && extractedName != "[Error getting name]" && extractedName != "[Unknown]") ? extractedName : uiaName;
         nameToMap = nameToMap?.Trim();
-        await mappingManager.PromptAndSaveMappingAsync(nameToMap, cancellationToken);
+        await _mappingManager.PromptAndSaveMappingAsync(nameToMap, cancellationToken);
     }
 
     async Task ShowMessageBoxAsync(string message, string title, MessageBoxButton button,
@@ -181,7 +195,7 @@ public class TaskbarMonitor : ITaskbarMonitor
             if(token.IsCancellationRequested || isDisposed ||
                Application.Current == null || Application.Current.Dispatcher.HasShutdownStarted) return;
 
-            dialogService.ShowMessageBox(message, title, button, icon);
+            _dialogService.ShowMessageBox(message, title, button, icon);
         }, DispatcherPriority.Normal, token);
     }
 
@@ -196,9 +210,12 @@ public class TaskbarMonitor : ITaskbarMonitor
                 StopMonitoring();
                 monitorCts?.Dispose();
                 monitorCts = null;
-                windowsHooks.RightMouseClick -= OnRightMouseClick;
-                (windowsHooks as IDisposable)?.Dispose();
-                knobManager?.Dispose();
+                if(_windowsHookService != null)
+                {
+                    _windowsHookService.RightMouseClick -= OnRightMouseClick;
+                    _windowsHookService.Dispose();
+                }
+                _knobManager?.Dispose();
             }
             isDisposed = true;
         }

@@ -17,34 +17,34 @@ public partial class SettingsViewModel : ObservableObject
     const char UIA_PROCESS_SEPARATOR = '|';
     const char PROCESS_LIST_SEPARATOR = ';';
 
-    readonly ISettingsService _settingsService;
-    readonly IDialogService _dialogService;
-    readonly IMappingManager _mappingManager;
+    private readonly ISettingsService _settingsService;
+    private readonly IDialogService _dialogService;
+    private readonly IMappingManager _mappingManager;
 
 
     [ObservableProperty]
-    ObservableCollection<MappingEntry> _mappings;
+    private ObservableCollection<MappingEntry> _mappings;
 
     [ObservableProperty]
-    MappingEntry _selectedMapping;
+    private MappingEntry _selectedMapping;
 
     [ObservableProperty]
-    bool _launchOnStartup;
+    private bool _launchOnStartup;
 
     [ObservableProperty]
-    bool _showPeakVolumeBar;
+    private bool _showPeakVolumeBar;
 
     [ObservableProperty]
-    bool _hotkeyCtrl;
+    private bool _hotkeyCtrl;
 
     [ObservableProperty]
-    bool _hotkeyAlt;
+    private bool _hotkeyAlt;
 
     [ObservableProperty]
-    bool _hotkeyShift;
+    private bool _hotkeyShift;
 
     [ObservableProperty]
-    bool _hotkeyWin;
+    private bool _hotkeyWin;
 
     public event Action<bool?> CloseRequested;
 
@@ -58,7 +58,7 @@ public partial class SettingsViewModel : ObservableObject
         LoadSettings();
     }
 
-    void LoadSettings()
+    private void LoadSettings()
     {
         LaunchOnStartup = _settingsService.LaunchOnStartup;
         ShowPeakVolumeBar = _settingsService.ShowPeakVolumeBar;
@@ -66,7 +66,7 @@ public partial class SettingsViewModel : ObservableObject
         LoadMappingsFromService();
     }
 
-    void LoadHotkeySettings()
+    private void LoadHotkeySettings()
     {
         HotkeyCtrl = _settingsService.Hotkey_Ctrl;
         HotkeyAlt = _settingsService.Hotkey_Alt;
@@ -74,7 +74,7 @@ public partial class SettingsViewModel : ObservableObject
         HotkeyWin = _settingsService.Hotkey_Win;
     }
 
-    void LoadMappingsFromService()
+    private void LoadMappingsFromService()
     {
         Mappings.Clear();
         var loadedMappingsData = _mappingManager.LoadManualMappings();
@@ -103,14 +103,12 @@ public partial class SettingsViewModel : ObservableObject
                 if(existingEntryInMappings != null)
                 {
                     existingEntryInMappings.ProcessNames = new List<string>(uniqueUiaNames[uiaName].ProcessNames);
-
                 }
             }
         }
     }
 
-
-    bool ValidateSettings()
+    private bool ValidateSettings()
     {
         if(!ValidateHotkeys()) return false;
         if(!ValidateMappingDuplicates()) return false;
@@ -118,7 +116,7 @@ public partial class SettingsViewModel : ObservableObject
         return true;
     }
 
-    bool ValidateHotkeys()
+    private bool ValidateHotkeys()
     {
         if(!HotkeyCtrl && !HotkeyAlt && !HotkeyShift && !HotkeyWin)
         {
@@ -128,7 +126,7 @@ public partial class SettingsViewModel : ObservableObject
         return true;
     }
 
-    bool ValidateMappingDuplicates()
+    private bool ValidateMappingDuplicates()
     {
         var duplicateUia = Mappings.GroupBy(m => m.UiaName, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => g.Key).FirstOrDefault();
         if(duplicateUia != null)
@@ -139,7 +137,7 @@ public partial class SettingsViewModel : ObservableObject
         return true;
     }
 
-    bool ValidateEmptyMappings()
+    private bool ValidateEmptyMappings()
     {
         var emptyMapping = Mappings.FirstOrDefault(m => string.IsNullOrWhiteSpace(m.UiaName) || m.ProcessNames == null || m.ProcessNames.Count == 0 || m.ProcessNames.All(string.IsNullOrWhiteSpace));
         if(emptyMapping != null)
@@ -150,7 +148,7 @@ public partial class SettingsViewModel : ObservableObject
         return true;
     }
 
-    void SaveSettingsToService()
+    private void SaveSettingsToService()
     {
         SaveStartupSetting();
         _settingsService.ShowPeakVolumeBar = ShowPeakVolumeBar;
@@ -159,9 +157,10 @@ public partial class SettingsViewModel : ObservableObject
         TrySaveSettingsToStorage();
     }
 
-    void SaveStartupSetting()
+    private void SaveStartupSetting()
     {
-        bool wantsStartup = LaunchOnStartup;
+        bool wantsStartup = this.LaunchOnStartup;
+
         if(_settingsService.LaunchOnStartup == wantsStartup) return;
 
         _settingsService.LaunchOnStartup = wantsStartup;
@@ -176,7 +175,7 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    void SaveHotkeySettingsToService()
+    private void SaveHotkeySettingsToService()
     {
         _settingsService.Hotkey_Ctrl = HotkeyCtrl;
         _settingsService.Hotkey_Alt = HotkeyAlt;
@@ -184,7 +183,7 @@ public partial class SettingsViewModel : ObservableObject
         _settingsService.Hotkey_Win = HotkeyWin;
     }
 
-    void SaveMappingsToService()
+    private void SaveMappingsToService()
     {
         var settingsCollection = new StringCollection();
         foreach(MappingEntry entry in Mappings)
@@ -201,14 +200,14 @@ public partial class SettingsViewModel : ObservableObject
         _settingsService.ManualMappings = settingsCollection;
     }
 
-    void TrySaveSettingsToStorage()
+    private void TrySaveSettingsToStorage()
     {
         try { _settingsService.Save(); }
         catch(Exception ex) { _dialogService.ShowMessageBox($"Error saving settings: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     [RelayCommand]
-    void AddEdit()
+    private void AddEdit()
     {
         var (dialogResult, uiaName, processName) = _dialogService.ShowAddMappingWindow();
         if(dialogResult != true) return;
@@ -221,7 +220,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    void Remove()
+    private void Remove()
     {
         if(SelectedMapping == null)
         {
@@ -239,7 +238,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    void Save()
+    private void Save()
     {
         if(ValidateSettings())
         {
@@ -249,5 +248,8 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    void Cancel() => CloseRequested?.Invoke(false);
+    private void Cancel()
+    {
+        CloseRequested?.Invoke(false);
+    }
 }

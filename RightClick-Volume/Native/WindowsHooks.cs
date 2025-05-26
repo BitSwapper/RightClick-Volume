@@ -1,13 +1,12 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using RightClickVolume.Interfaces;
 
 namespace RightClickVolume.Native;
 
-public class WindowsHooks
+public class WindowsHooks : IWindowsHookService
 {
-    #region Win32 API Declarations
-
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
 
@@ -28,28 +27,24 @@ public class WindowsHooks
     public static extern bool GetCursorPos(out POINT lpPoint);
 
     const int WH_MOUSE_LL = 14;
-    const int WM_RBUTTONDOWN = 0x0204;
     const int WM_RBUTTONUP = 0x0205;
 
     delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
-    #endregion
-
-    #region Hook Implementation
-
     IntPtr mouseHookHandle = IntPtr.Zero;
-    HookProc mouseProc;
+    HookProc mouseProcDelegate;
     public event EventHandler<MouseHookEventArgs> RightMouseClick;
 
-    public WindowsHooks() => mouseProc = MouseHookCallback;
-
+    public WindowsHooks()
+    {
+        mouseProcDelegate = MouseHookCallback;
+    }
 
     public void InstallMouseHook()
     {
         if(mouseHookHandle == IntPtr.Zero)
         {
-            mouseProc = MouseHookCallback;
-            mouseHookHandle = SetWindowsHookEx(WH_MOUSE_LL, mouseProc,
+            mouseHookHandle = SetWindowsHookEx(WH_MOUSE_LL, mouseProcDelegate,
                 GetModuleHandle(Process.GetCurrentProcess().MainModule.ModuleName), 0);
 
             if(mouseHookHandle == IntPtr.Zero)
@@ -60,7 +55,6 @@ public class WindowsHooks
         }
     }
 
-
     public void UninstallMouseHook()
     {
         if(mouseHookHandle != IntPtr.Zero)
@@ -69,7 +63,6 @@ public class WindowsHooks
             mouseHookHandle = IntPtr.Zero;
         }
     }
-
 
     IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
@@ -90,13 +83,8 @@ public class WindowsHooks
                 });
             }
         }
-
         return CallNextHookEx(mouseHookHandle, nCode, wParam, lParam);
     }
-
-    #endregion
-
-    #region Native Structures
 
     [StructLayout(LayoutKind.Sequential)]
     struct MSLLHOOKSTRUCT
@@ -108,9 +96,28 @@ public class WindowsHooks
         public IntPtr dwExtraInfo;
     }
 
-    #endregion
+    private bool disposedValue = false;
+    protected virtual void Dispose(bool disposing)
+    {
+        if(!disposedValue)
+        {
+            if(disposing)
+            {
+            }
+            UninstallMouseHook();
+            disposedValue = true;
+        }
+    }
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+    ~WindowsHooks()
+    {
+        Dispose(disposing: false);
+    }
 }
-
 
 public class MouseHookEventArgs : EventArgs
 {

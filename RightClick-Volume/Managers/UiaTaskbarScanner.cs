@@ -2,10 +2,11 @@
 using System.Threading;
 using System.Windows;
 using System.Windows.Automation;
+using RightClickVolume.Interfaces;
 
 namespace RightClickVolume.Managers;
 
-internal class UiaTaskbarScanner
+internal class UiaTaskbarScanner : IUiaScannerService
 {
     readonly AutomationElement rootElement;
     readonly TreeWalker controlViewWalker;
@@ -50,8 +51,11 @@ internal class UiaTaskbarScanner
         {
             var controlType = UiaHelper.GetControlTypeSafe(currentElement);
             if(controlType == ControlType.Button || controlType == ControlType.ListItem)
+            {
                 if(IsDescendantOfTaskbar(currentElement))
                     return currentElement;
+            }
+
 
             try
             {
@@ -62,7 +66,6 @@ internal class UiaTaskbarScanner
                 return null;
             }
         }
-
         return null;
     }
 
