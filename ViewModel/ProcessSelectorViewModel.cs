@@ -1,0 +1,70 @@
+﻿// ProcessSelectorViewModel.cs
+using System;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Linq;
+using System.Windows;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
+namespace RightClickVolume.ViewModels;
+
+public partial class ProcessSelectorViewModel : ObservableObject
+{
+    [ObservableProperty]
+    ObservableCollection<Process> _processes;
+
+    [ObservableProperty]
+    Process _selectedProcess;
+
+    public event Action<bool?> CloseRequested;
+
+    public ProcessSelectorViewModel()
+    {
+        Processes = new ObservableCollection<Process>();
+        LoadProcesses();
+    }
+
+    void LoadProcesses()
+    {
+        try
+        {
+            var processList = System.Diagnostics.Process.GetProcesses()
+                .Where(p => p.Id != 0 && !string.IsNullOrEmpty(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero)
+                .OrderBy(p => p.ProcessName)
+                .ToList();
+            foreach(var p in processList)
+            {
+                Processes.Add(p);
+            }
+        }
+        catch(Exception ex)
+        {
+            MessageBox.Show($"Error loading processes: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    void Select()
+    {
+        if(SelectedProcess != null)
+        {
+            CloseRequested?.Invoke(true);
+        }
+        else
+        {
+            MessageBox.Show("Please select a process from the list.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    [RelayCommand]
+    void Cancel() => CloseRequested?.Invoke(false);
+
+    public void HandleDoubleClick()
+    {
+        if(SelectedProcess != null)
+        {
+            Select();
+        }
+    }
+}

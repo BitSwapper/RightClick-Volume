@@ -1,4 +1,5 @@
-﻿<Window x:Class="RightClickVolume.VolumeKnob"
+﻿<!-- VolumeKnob.xaml -->
+<Window x:Class="RightClickVolume.VolumeKnob"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -63,14 +64,13 @@
         <Style x:Key="MuteButtonStyle" TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
             <Setter Property="FontFamily" Value="Segoe UI Emoji"/>
             <Setter Property="FontSize" Value="10"/>
+            <!-- Background and Foreground will be bound to ViewModel properties -->
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#5A5A5A"/>
-                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                    <!-- Keep hover effects if not overridden by direct binding -->
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#6A6A6A"/>
-                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                    <!-- Keep press effects if not overridden by direct binding -->
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -182,7 +182,6 @@
 
     <Border CornerRadius="10" BorderThickness="0"
             MouseLeftButtonDown="Window_MouseLeftButtonDown_Drag">
-        <!-- Changed name for clarity -->
         <Border.Background>
             <RadialGradientBrush GradientOrigin="0.5, 0.5" Center="0.5,0.5" RadiusX="1" RadiusY="2">
                 <GradientStop Color="#FF444444" Offset="0.0" />
@@ -202,30 +201,36 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Row 0: Buttons -->
             <Grid Grid.Row="0" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Button x:Name="MuteButton" Grid.Column="0" Content="🔊" Style="{StaticResource MuteButtonStyle}" HorizontalAlignment="Left" ToolTip="Mute/Unmute" Click="MuteButton_Click"/>
-                <Button x:Name="CloseButton" Grid.Column="1" Content="✕" Style="{StaticResource ModernButtonStyle}" HorizontalAlignment="Right" ToolTip="Close" Click="CloseButton_Click"/>
+                <Button Grid.Column="0"
+                        Command="{Binding MuteCommand}"
+                        Content="{Binding MuteButtonContent}"
+                        Background="{Binding MuteButtonBackground}"
+                        Foreground="{Binding MuteButtonForeground}"
+                        Style="{StaticResource MuteButtonStyle}"
+                        HorizontalAlignment="Left" ToolTip="Mute/Unmute"/>
+                <Button Grid.Column="1"
+                        Command="{Binding CloseCommand}"
+                        Content="✕" Style="{StaticResource ModernButtonStyle}"
+                        HorizontalAlignment="Right" ToolTip="Close"/>
             </Grid>
 
-            <!-- Row 1: Current Volume Text -->
-            <TextBlock x:Name="TextCurVol" Grid.Row="1" Text="{Binding CurVol, FallbackValue=50, TargetNullValue=--}" Foreground="#EFEFEF" FontWeight="DemiBold" FontSize="20" TextAlignment="Center" Margin="0,0,0,5"
+            <TextBlock Grid.Row="1" Text="{Binding CurVol, FallbackValue=50, TargetNullValue=--}" Foreground="#EFEFEF" FontWeight="DemiBold" FontSize="20" TextAlignment="Center" Margin="0,0,0,5"
                        MouseLeftButtonDown="Window_MouseLeftButtonDown_Drag"/>
 
-            <!-- Row 2 & 3 (spanned): Volume Slider and Peak Meter -->
             <Grid Grid.Row="2" Grid.RowSpan="2"
-                        HorizontalAlignment="Center" VerticalAlignment="Stretch" Margin="0,8,0,8">
+                  HorizontalAlignment="Center" VerticalAlignment="Stretch" Margin="0,8,0,8">
 
                 <Slider x:Name="VolumeSlider"
                         Orientation="Vertical"
                         Minimum="0" Maximum="100"
                         Value="{Binding Volume, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{Binding IsVolumeSliderEnabled}"
                         IsDirectionReversed="False"
-                        ValueChanged="VolumeSlider_ValueChanged"
                         Style="{StaticResource VolumeSliderStyle}"
                         VerticalAlignment="Stretch"
                         Panel.ZIndex="1"
@@ -241,12 +246,11 @@
                              Value="{Binding PeakLevel, Mode=OneWay, FallbackValue=0}"
                              VerticalAlignment="Stretch"
                              Margin="5, 2, 0, 1"
-                             IsEnabled="{Binding Path=IsEnabled, ElementName=VolumeSlider}"
+                             IsEnabled="{Binding IsVolumeSliderEnabled}"
                              Visibility="{Binding Source={x:Static p:Settings.Default}, Path=ShowPeakVolumeBar, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"/>
             </Grid>
 
-            <!-- Row 4: App Name Text -->
-            <TextBlock x:Name="AppNameTextBlock" Grid.Row="4" Text="{Binding AppName, FallbackValue=Application Name, TargetNullValue=Unknown App}" Foreground="#DDDDDD" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" FontSize="11" Margin="0,8,0,0"
+            <TextBlock Grid.Row="4" Text="{Binding AppName, FallbackValue=Application Name, TargetNullValue=Unknown App}" Foreground="#DDDDDD" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" FontSize="11" Margin="0,8,0,0"
                        MouseLeftButtonDown="Window_MouseLeftButtonDown_Drag"/>
         </Grid>
     </Border>

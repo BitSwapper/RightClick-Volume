@@ -1,4 +1,5 @@
-﻿<Window x:Class="RightClickVolume.ProcessSelectorDialog"
+﻿<!-- ProcessSelectorDialog.xaml -->
+<Window x:Class="RightClickVolume.ProcessSelectorDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -15,11 +16,14 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Filter:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-        <!-- Optional Filter TextBox - Implementation omitted for brevity -->
-        <!-- <TextBox Grid.Row="0" Grid.Column="1" x:Name="FilterTextBox" Margin="0,0,0,5" TextChanged="FilterTextBox_TextChanged"/> -->
+        <TextBlock Grid.Row="0" Text="Filter:" VerticalAlignment="Center" Margin="0,0,5,0" Visibility="Collapsed"/>
+        <!-- Filter not implemented -->
 
-        <ListView x:Name="ProcessListView" Grid.Row="1" Margin="0,5" SelectionMode="Single" MouseDoubleClick="ProcessListView_MouseDoubleClick">
+        <ListView x:Name="ProcessListView" Grid.Row="1" Margin="0,5" 
+                  ItemsSource="{Binding Processes}" 
+                  SelectedItem="{Binding SelectedProcess}"
+                  SelectionMode="Single" 
+                  MouseDoubleClick="ProcessListView_MouseDoubleClick">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="Process Name" Width="180" DisplayMemberBinding="{Binding ProcessName}"/>
@@ -29,8 +33,8 @@
         </ListView>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,0">
-            <Button Content="Select" Width="80" Margin="5,0" Click="SelectButton_Click" IsDefault="True"/>
-            <Button Content="Cancel" Width="80" Margin="5,0" IsCancel="True"/>
+            <Button Content="Select" Width="80" Margin="5,0" Command="{Binding SelectCommand}" IsDefault="True"/>
+            <Button Content="Cancel" Width="80" Margin="5,0" Command="{Binding CancelCommand}" IsCancel="True"/>
         </StackPanel>
     </Grid>
 </Window>
