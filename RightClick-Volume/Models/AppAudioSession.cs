@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Diagnostics;
 using NAudio.CoreAudioApi;
+using RightClickVolume.Interfaces;
 
 namespace RightClickVolume.Models;
 
-public class AppAudioSession : IDisposable
+public class AppAudioSession : IAppAudioSession
 {
     readonly AudioSessionControl _sessionControl;
     readonly SimpleAudioVolume _volumeControl;
@@ -13,7 +14,6 @@ public class AppAudioSession : IDisposable
 
     public uint ProcessId { get; private set; }
     public string DisplayName { get; private set; }
-
 
     public float Volume
     {
@@ -73,22 +73,28 @@ public class AppAudioSession : IDisposable
             throw new ArgumentNullException(nameof(sessionControl));
 
         _sessionControl = sessionControl;
-        _volumeControl = sessionControl.SimpleAudioVolume;
-        _meterInformation = sessionControl.AudioMeterInformation;
+        try
+        {
+            _volumeControl = sessionControl.SimpleAudioVolume;
+            _meterInformation = sessionControl.AudioMeterInformation;
+        }
+        catch(Exception ex)
+        {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] AppAudioSession (PID: {processId}, Name: {displayName}): ERROR getting Volume/Meter controls: {ex.Message}");
+            // Allow construction but it might be partially functional
+        }
+
 
         ProcessId = processId;
-
         DisplayName = !string.IsNullOrEmpty(displayName) ? displayName : $"PID: {processId}";
-
     }
 
     public void SetVolume(float volume)
     {
-        if(_isDisposed) return;
+        if(_isDisposed || _volumeControl == null) return;
         try
         {
-            if(_volumeControl != null)
-                _volumeControl.Volume = Math.Clamp(volume, 0f, 1f);
+            _volumeControl.Volume = Math.Clamp(volume, 0f, 1f);
         }
         catch(Exception ex)
         {
@@ -98,11 +104,10 @@ public class AppAudioSession : IDisposable
 
     public void SetMute(bool mute)
     {
-        if(_isDisposed) return;
+        if(_isDisposed || _volumeControl == null) return;
         try
         {
-            if(_volumeControl != null)
-                _volumeControl.Mute = mute;
+            _volumeControl.Mute = mute;
         }
         catch(Exception ex)
         {
@@ -121,8 +126,9 @@ public class AppAudioSession : IDisposable
         if(!_isDisposed)
         {
             if(disposing)
+            {
                 _sessionControl?.Dispose();
-
+            }
             _isDisposed = true;
         }
     }

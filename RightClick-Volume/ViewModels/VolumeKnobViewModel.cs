@@ -1,64 +1,80 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using RightClickVolume.Models;
+using RightClickVolume.Interfaces;
+using RightClickVolume.Properties;
 
 namespace RightClickVolume.ViewModels;
 
 public partial class VolumeKnobViewModel : ObservableObject
 {
-    AppAudioSession _session;
-    bool _isUpdatingVolumeFromCode;
+    private IAppAudioSession _session;
+    private bool _isUpdatingVolumeFromCode;
 
     const float VolumeScaleFactor = 100.0f;
     const string FORMAT_VolumeDisplay = "F0";
     const string IconMuted = "🔇";
     const string IconUnMuted = "🔊";
-    static readonly SolidColorBrush BG_Muted = new SolidColorBrush(Color.FromRgb(0x80, 0x30, 0x30));
-    static readonly SolidColorBrush FG_Muted = Brushes.White;
-    static readonly SolidColorBrush BG_UnMuted = Brushes.Transparent;
-    static readonly SolidColorBrush FG_UnMuted = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC));
+
+    private static readonly SolidColorBrush s_bgMuted;
+    private static readonly SolidColorBrush s_fgMuted;
+    private static readonly SolidColorBrush s_bgUnMuted;
+    private static readonly SolidColorBrush s_fgUnMuted;
+
+    static VolumeKnobViewModel()
+    {
+        s_bgMuted = new SolidColorBrush(Color.FromRgb(0x80, 0x30, 0x30));
+        if(s_bgMuted.CanFreeze) s_bgMuted.Freeze();
+
+        s_fgMuted = (SolidColorBrush)Brushes.White;
+
+        s_bgUnMuted = (SolidColorBrush)Brushes.Transparent;
+
+        s_fgUnMuted = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC));
+        if(s_fgUnMuted.CanFreeze) s_fgUnMuted.Freeze();
+    }
 
     [ObservableProperty]
-    float _volume;
+    private float _volume;
 
     [ObservableProperty]
-    string _appName;
+    private string _appName;
 
     [ObservableProperty]
-    string _curVol;
+    private string _curVol;
 
     [ObservableProperty]
-    float _peakLevel;
+    private float _peakLevel;
 
     [ObservableProperty]
-    bool _isMuted;
+    private bool _isMuted;
 
     [ObservableProperty]
-    string _muteButtonContent;
+    private string _muteButtonContent;
 
     [ObservableProperty]
-    Brush _muteButtonBackground;
+    private Brush _muteButtonBackground;
 
     [ObservableProperty]
-    Brush _muteButtonForeground;
+    private Brush _muteButtonForeground;
 
     [ObservableProperty]
-    bool _isVolumeSliderEnabled;
+    private bool _isVolumeSliderEnabled;
 
     public event Action RequestClose;
 
     public VolumeKnobViewModel()
     {
         MuteButtonContent = IconUnMuted;
-        MuteButtonBackground = BG_UnMuted;
-        MuteButtonForeground = FG_UnMuted;
+        MuteButtonBackground = s_bgUnMuted;
+        MuteButtonForeground = s_fgUnMuted;
         IsVolumeSliderEnabled = true;
     }
 
-    public void InitializeSession(AppAudioSession session)
+    public void InitializeSession(IAppAudioSession session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         AppName = _session.DisplayName;
@@ -91,18 +107,17 @@ public partial class VolumeKnobViewModel : ObservableObject
             }
             _session.SetVolume(value / VolumeScaleFactor);
         }
-
         Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] OnVolumeChanged: Volume is now {value:F2} on App: {this.AppName}");
     }
 
     partial void OnPeakLevelChanged(float value)
     {
-        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] OnPropertyChanged Fired for: {nameof(PeakLevel)} (New Value: {value:F4}) on App: {this.AppName}");
+        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] OnPropertyChanged Fired for: {nameof(PeakLevel)} (New Value: {_peakLevel:F4}) on App: {this.AppName}");
     }
 
 
     [RelayCommand]
-    void Mute()
+    private void Mute()
     {
         if(_session != null)
         {
@@ -116,15 +131,18 @@ public partial class VolumeKnobViewModel : ObservableObject
     }
 
     [RelayCommand]
-    void Close() => RequestClose?.Invoke();
+    private void Close()
+    {
+        RequestClose?.Invoke();
+    }
 
     public void UpdateMuteState()
     {
         if(_session == null) return;
         IsMuted = _session.IsMuted;
         MuteButtonContent = IsMuted ? IconMuted : IconUnMuted;
-        MuteButtonBackground = IsMuted ? BG_Muted : BG_UnMuted;
-        MuteButtonForeground = IsMuted ? FG_Muted : FG_UnMuted;
+        MuteButtonBackground = IsMuted ? s_bgMuted : s_bgUnMuted;
+        MuteButtonForeground = IsMuted ? s_fgMuted : s_fgUnMuted;
         IsVolumeSliderEnabled = !IsMuted;
     }
 

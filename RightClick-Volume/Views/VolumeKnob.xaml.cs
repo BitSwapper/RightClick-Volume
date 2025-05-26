@@ -1,5 +1,4 @@
-﻿// VolumeKnob.xaml.cs
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
@@ -16,15 +15,15 @@ namespace RightClickVolume;
 
 public partial class VolumeKnob : Window
 {
-    VolumeKnobViewModel _viewModel;
-    AppAudioSession _currentSession; // Keep a reference for timer logic not in VM
+    private VolumeKnobViewModel _viewModel;
+    private AppAudioSession _currentSessionConcrete;
 
     bool isDraggingSlider = false;
     Thumb sliderThumb;
     bool isWindowInitializationComplete = false;
 
     DispatcherTimer peakMeterTimer;
-    float _peakLevelInternal; // Internal value for smoothing, VM.PeakLevel is the final display value
+    float _peakLevelInternal;
 
     const float PeakAttackFactor = 0.9f;
     const float PeakDecayFactor = 0.80f;
@@ -72,10 +71,11 @@ public partial class VolumeKnob : Window
     {
         if(peakMeterTimer == null) return;
 
-        bool sessionMuted = _currentSession?.IsMuted ?? true; // If no session, consider muted for timer
+        bool sessionMuted = _viewModel?.IsSessionMuted() ?? true;
+
         bool shouldTimerRun = Settings.Default.ShowPeakVolumeBar &&
                               this.IsVisible &&
-                              _currentSession != null &&
+                              _currentSessionConcrete != null &&
                               !sessionMuted;
 
         if(shouldTimerRun)
@@ -91,21 +91,23 @@ public partial class VolumeKnob : Window
             if(peakMeterTimer.IsEnabled)
             {
                 peakMeterTimer.Stop();
-                _viewModel.PeakLevel = 0;
+                if(_viewModel != null) _viewModel.PeakLevel = 0;
+                _peakLevelInternal = 0;
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Peak meter timer STOPPED for {_viewModel.AppName} (Show: {Settings.Default.ShowPeakVolumeBar}, Visible: {this.IsVisible}, Muted: {sessionMuted}).");
             }
             if(!Settings.Default.ShowPeakVolumeBar || sessionMuted || !this.IsVisible)
             {
-                _viewModel.PeakLevel = 0;
+                if(_viewModel != null) _viewModel.PeakLevel = 0;
+                _peakLevelInternal = 0;
             }
         }
     }
 
-
     public void ShowAt(double left, double top, AppAudioSession session)
     {
         Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob.ShowAt: Method called for session: {(session?.DisplayName ?? "NULL SESSION")}, PID: {(session?.ProcessId.ToString() ?? "N/A")}");
-        _currentSession = session;
+
+        _currentSessionConcrete = session;
         _viewModel.InitializeSession(session);
 
         this.Left = left;
@@ -116,8 +118,10 @@ public partial class VolumeKnob : Window
             this.Activate();
             Task.Run(async () =>
             {
-                await Task.Delay(TOPMOST_RESET_INITIAL_DELAY); Dispatcher.Invoke(ResetTopmostState);
-                await Task.Delay(TOPMOST_RESET_SECONDARY_DELAY); Dispatcher.Invoke(() => { ResetTopmostState(); this.Activate(); });
+                await Task.Delay(TOPMOST_RESET_INITIAL_DELAY);
+                if(this.IsVisible) Dispatcher.Invoke(ResetTopmostState);
+                await Task.Delay(TOPMOST_RESET_SECONDARY_DELAY);
+                if(this.IsVisible) Dispatcher.Invoke(() => { ResetTopmostState(); this.Activate(); });
             });
             _viewModel.PeakLevel = 0;
             _peakLevelInternal = 0;
@@ -159,7 +163,7 @@ public partial class VolumeKnob : Window
 
     void VolumeKnob_MouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if(!isWindowInitializationComplete || _currentSession == null || !_viewModel.IsVolumeSliderEnabled)
+        if(!isWindowInitializationComplete || _currentSessionConcrete == null || !_viewModel.IsVolumeSliderEnabled)
             return;
 
         float newVolume = _viewModel.Volume;
@@ -183,11 +187,14 @@ public partial class VolumeKnob : Window
         {
             Task.Delay(MouseLeaveHideDelay).ContinueWith(t =>
             {
-                Application.Current?.Dispatcher.Invoke(() =>
+                if(this.IsVisible)
                 {
-                    if(this.IsVisible && !this.IsMouseOver && !isDraggingSlider) Hide();
-                });
-            });
+                    Application.Current?.Dispatcher.Invoke(() =>
+                    {
+                        if(this.IsVisible && !this.IsMouseOver && !isDraggingSlider) Hide();
+                    });
+                }
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
         }
     }
 
@@ -215,13 +222,16 @@ public partial class VolumeKnob : Window
         _peakLevelInternal = 0;
         this.isWindowInitializationComplete = false;
         DetachSliderEvents();
-        _currentSession = null;
+        _currentSessionConcrete = null;
         if(_viewModel != null) _viewModel.RequestClose -= Hide;
+
         this.Deactivated -= VolumeKnob_Deactivated;
         this.Loaded -= VolumeKnob_Loaded;
         this.Closed -= VolumeKnob_Closed;
         this.KeyDown -= VolumeKnob_KeyDown;
         this.MouseLeave -= VolumeKnob_MouseLeave;
+        DataContext = null;
+        _viewModel = null;
         Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VolumeKnob_Closed: Cleanup complete.");
     }
 
@@ -294,37 +304,37 @@ public partial class VolumeKnob : Window
 
     void PeakMeterTimer_Tick(object sender, EventArgs e)
     {
-        if(_currentSession != null)
+        if(_currentSessionConcrete != null && _viewModel != null)
         {
             float rawPeak = 0f;
             try
             {
-                rawPeak = _currentSession.CurrentPeakValue;
+                rawPeak = _currentSessionConcrete.CurrentPeakValue;
             }
             catch(ObjectDisposedException)
             {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTimer_Tick: Session '{_currentSession.DisplayName}' disposed. Stopping timer.");
-                if(_viewModel != null) _viewModel.PeakLevel = 0;
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTimer_Tick: Session '{_currentSessionConcrete.DisplayName}' disposed. Stopping timer.");
+                _viewModel.PeakLevel = 0;
                 _peakLevelInternal = 0;
                 if(peakMeterTimer.IsEnabled) peakMeterTimer.Stop();
-                _currentSession = null;
+                _currentSessionConcrete = null;
                 return;
             }
             catch(Exception ex)
             {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTimer_Tick: ERROR getting _currentSession.CurrentPeakValue for '{_currentSession.DisplayName}': {ex.Message}");
-                if(_viewModel != null) _viewModel.PeakLevel = 0;
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTimer_Tick: ERROR getting _currentSessionConcrete.CurrentPeakValue for '{_currentSessionConcrete.DisplayName}': {ex.Message}");
+                _viewModel.PeakLevel = 0;
                 _peakLevelInternal = 0;
                 return;
             }
 
             float curvedPeak = (float)Math.Pow(Math.Max(0, rawPeak), PeakCurvePower);
             float scaledPeak = curvedPeak * BasePeakMeterScaleFactor;
-            float currentVolumeSettingFactor = _viewModel.Volume / 100.0f; // Use VM Volume
+            float currentVolumeSettingFactor = _viewModel.Volume / 100.0f;
             float targetPeakForUI = scaledPeak * currentVolumeSettingFactor;
             targetPeakForUI = Math.Clamp(targetPeakForUI, 0f, 100f);
 
-            if(_currentSession.IsMuted)
+            if(_viewModel.IsSessionMuted())
                 targetPeakForUI = 0;
 
             float currentDisplayedPeak = _peakLevelInternal;
@@ -356,16 +366,16 @@ public partial class VolumeKnob : Window
                 newSmoothedDisplayValue = Math.Max(newSmoothedDisplayValue, targetPeakForUI);
 
             _peakLevelInternal = newSmoothedDisplayValue;
-            if(_viewModel != null) _viewModel.PeakLevel = _peakLevelInternal;
+            _viewModel.PeakLevel = _peakLevelInternal;
         }
         else
         {
             if(_viewModel != null) _viewModel.PeakLevel = 0;
             _peakLevelInternal = 0;
-            if(peakMeterTimer.IsEnabled)
+            if(peakMeterTimer != null && peakMeterTimer.IsEnabled)
             {
                 peakMeterTimer.Stop();
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTimer_Tick: Session became null, stopping timer.");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] PeakMeterTimer_Tick: Session or ViewModel became null, stopping timer.");
             }
         }
     }

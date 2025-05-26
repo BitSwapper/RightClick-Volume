@@ -1,33 +1,38 @@
-﻿using System;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RightClickVolume.Interfaces;
 
 namespace RightClickVolume.ViewModels;
 
 public partial class ProcessSelectorViewModel : ObservableObject
 {
-    [ObservableProperty]
-    ObservableCollection<Process> _processes;
+    private readonly IDialogService _dialogService;
 
     [ObservableProperty]
-    Process _selectedProcess;
+    private ObservableCollection<Process> _processes;
+
+    [ObservableProperty]
+    private Process _selectedProcess;
 
     public event Action<bool?> CloseRequested;
 
-    public ProcessSelectorViewModel()
+    public ProcessSelectorViewModel(IDialogService dialogService)
     {
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         Processes = new ObservableCollection<Process>();
         LoadProcesses();
     }
 
-    void LoadProcesses()
+    private void LoadProcesses()
     {
         try
         {
+            Processes.Clear();
             var processList = System.Diagnostics.Process.GetProcesses()
                 .Where(p => p.Id != 0 && !string.IsNullOrEmpty(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero)
                 .OrderBy(p => p.ProcessName)
@@ -39,12 +44,12 @@ public partial class ProcessSelectorViewModel : ObservableObject
         }
         catch(Exception ex)
         {
-            MessageBox.Show($"Error loading processes: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogService.ShowMessageBox($"Error loading processes: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
     [RelayCommand]
-    void Select()
+    private void Select()
     {
         if(SelectedProcess != null)
         {
@@ -52,18 +57,21 @@ public partial class ProcessSelectorViewModel : ObservableObject
         }
         else
         {
-            MessageBox.Show("Please select a process from the list.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+            _dialogService.ShowMessageBox("Please select a process from the list.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
     [RelayCommand]
-    void Cancel() => CloseRequested?.Invoke(false);
+    private void Cancel()
+    {
+        CloseRequested?.Invoke(false);
+    }
 
     public void HandleDoubleClick()
     {
         if(SelectedProcess != null)
         {
-            Select();
+            SelectCommand.Execute(null);
         }
     }
 }
