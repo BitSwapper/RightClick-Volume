@@ -11,39 +11,44 @@ using RightClickVolume.Native;
 
 namespace RightClickVolume.Managers;
 
-internal class ProcessIdentifier
+public class ProcessIdentifier : IProcessIdentifier
 {
-    readonly uint currentProcessId;
-    readonly IMappingManager mappingManager;
+    private readonly uint _currentProcessId;
+    private readonly IMappingManager _mappingManager;
+
+    public class IdentificationResult
+    {
+        public uint ProcessId { get; init; }
+        public string ApplicationName { get; init; }
+        public string Method { get; init; }
+        public bool Success => ProcessId != 0;
+    }
 
     public ProcessIdentifier(uint currentProcessId, IMappingManager mappingManager)
     {
-        this.currentProcessId = currentProcessId;
-        this.mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
+        _currentProcessId = currentProcessId;
+        _mappingManager = mappingManager ?? throw new ArgumentNullException(nameof(mappingManager));
     }
-
     public IdentificationResult IdentifyProcess(AutomationElement targetElement, string extractedName, CancellationToken cancellationToken)
     {
-        string threadIdPrefix = $"   [BG Thread {Thread.CurrentThread.ManagedThreadId}]";
-
-        var directResult = GetDirectPid(targetElement, threadIdPrefix);
+        var directResult = GetDirectPid(targetElement);
         if(directResult.Success)
             return directResult;
 
         cancellationToken.ThrowIfCancellationRequested();
-        var fallbackResult = GetFallbackPid(extractedName, threadIdPrefix, cancellationToken);
+        var fallbackResult = GetFallbackPid(extractedName, cancellationToken);
         if(fallbackResult.Success)
             return fallbackResult;
 
         cancellationToken.ThrowIfCancellationRequested();
-        var mappedResult = GetMappedPid(extractedName, threadIdPrefix, cancellationToken);
+        var mappedResult = GetMappedPid(extractedName, cancellationToken);
         if(mappedResult.Success)
             return mappedResult;
 
         return new IdentificationResult { ProcessId = 0 };
     }
 
-    IdentificationResult GetDirectPid(AutomationElement targetElement, string threadIdPrefix)
+    IdentificationResult GetDirectPid(AutomationElement targetElement)
     {
         uint directPid = 0;
         string directPidSource = "None";
@@ -61,30 +66,34 @@ internal class ProcessIdentifier
         }
 
         if(directPid == 0 && UiaHelper.TryGetElementPid(targetElement, out uint pidFromUia))
+        {
             if(pidFromUia != 0)
             {
                 directPid = pidFromUia;
                 directPidSource = "UIA PID";
                 allowExplorer = false;
             }
+        }
+
 
         if(directPid != 0)
-            if(IsValidAppPid(directPid, $"Direct Check ({directPidSource})", allowExplorer, threadIdPrefix))
+        {
+            if(IsValidAppPid(directPid, $"Direct Check ({directPidSource})", allowExplorer))
                 return new IdentificationResult
                 {
                     ProcessId = directPid,
                     ApplicationName = GetProcessNameSafe(directPid),
                     Method = "Direct"
                 };
-
+        }
         return new IdentificationResult { ProcessId = 0 };
     }
 
-    IdentificationResult GetFallbackPid(string extractedName, string threadIdPrefix, CancellationToken cancellationToken)
+    IdentificationResult GetFallbackPid(string extractedName, CancellationToken cancellationToken)
     {
         if(!string.IsNullOrWhiteSpace(extractedName) && extractedName != "[Error getting name]" && extractedName != "[Unknown]")
         {
-            uint pidFromTitle = FindProcessIdByWindowTitle(extractedName, cancellationToken, threadIdPrefix);
+            uint pidFromTitle = FindProcessIdByWindowTitle(extractedName, cancellationToken);
             if(pidFromTitle != 0)
                 return new IdentificationResult
                 {
@@ -93,16 +102,15 @@ internal class ProcessIdentifier
                     Method = "Window Title"
                 };
         }
-
         return new IdentificationResult { ProcessId = 0 };
     }
 
-    IdentificationResult GetMappedPid(string extractedName, string threadIdPrefix, CancellationToken cancellationToken)
+    IdentificationResult GetMappedPid(string extractedName, CancellationToken cancellationToken)
     {
         if(string.IsNullOrWhiteSpace(extractedName) || extractedName == "[Error getting name]" || extractedName == "[Unknown]")
             return new IdentificationResult { ProcessId = 0 };
 
-        var userMappings = mappingManager.LoadManualMappings();
+        var userMappings = _mappingManager.LoadManualMappings();
         if(!userMappings.TryGetValue(extractedName, out List<string> mappedProcessNames) || mappedProcessNames.Count == 0)
             return new IdentificationResult { ProcessId = 0 };
 
@@ -120,8 +128,7 @@ internal class ProcessIdentifier
                 continue;
             }
 
-            if(foundProcesses?.Length <= 0)
-                continue;
+            if(foundProcesses == null || foundProcesses.Length == 0) continue;
 
             Process validProcess = null;
             uint potentialPid = 0;
@@ -129,26 +136,23 @@ internal class ProcessIdentifier
             foreach(var currentProcess in foundProcesses)
             {
                 if(cancellationToken.IsCancellationRequested) break;
-
                 uint currentPotentialPid = 0;
                 try
                 {
                     currentPotentialPid = (uint)currentProcess.Id;
-                    if(IsValidAppPid(currentPotentialPid, $"Manual Mapping Match ('{extractedName}' -> '{mappedProcessName}')", false, threadIdPrefix))
+                    if(IsValidAppPid(currentPotentialPid, $"Manual Mapping Match ('{extractedName}' -> '{mappedProcessName}')", false))
                     {
                         potentialPid = currentPotentialPid;
                         validProcess = currentProcess;
                         break;
                     }
                 }
-                catch
+                catch { }
+                finally
                 {
-                    try { currentProcess.Dispose(); } catch { }
-                    continue;
+                    if(validProcess != currentProcess)
+                        currentProcess.Dispose();
                 }
-
-                if(validProcess != currentProcess)
-                    try { currentProcess.Dispose(); } catch { }
             }
 
             if(validProcess != null && potentialPid != 0)
@@ -156,22 +160,22 @@ internal class ProcessIdentifier
                 var result = new IdentificationResult
                 {
                     ProcessId = potentialPid,
-                    ApplicationName = validProcess.ProcessName,
+                    ApplicationName = GetProcessNameSafe(potentialPid),
                     Method = "Manual Mapping"
                 };
-                try { validProcess.Dispose(); } catch { }
+                validProcess.Dispose();
+                foreach(var p in foundProcesses) { if(p != validProcess && !p.HasExited) p.Dispose(); }
                 return result;
             }
             else
-                foreach(var p in foundProcesses)
-                    if(p != validProcess)
-                        try { p.Dispose(); } catch { }
+            {
+                foreach(var p in foundProcesses) { if(!p.HasExited) p.Dispose(); }
+            }
         }
-
         return new IdentificationResult { ProcessId = 0 };
     }
 
-    uint FindProcessIdByWindowTitle(string extractedName, CancellationToken cancellationToken, string threadIdPrefix)
+    uint FindProcessIdByWindowTitle(string extractedName, CancellationToken cancellationToken)
     {
         if(string.IsNullOrWhiteSpace(extractedName)) return 0;
 
@@ -181,7 +185,6 @@ internal class ProcessIdentifier
         WindowsInterop.EnumWindows((hWnd, lParam) =>
         {
             if(cancellationToken.IsCancellationRequested) return false;
-
             try
             {
                 if(!WindowsInterop.IsWindowVisible(hWnd)) return true;
@@ -193,61 +196,68 @@ internal class ProcessIdentifier
                 bool isCloaked = false;
 
                 if(Environment.OSVersion.Version.Major >= 6 && Environment.OSVersion.Version.Minor >= 2)
+                {
                     try
                     {
                         int result = WindowsInterop.DwmGetWindowAttribute(hWnd, WindowsInterop.DWMWA_CLOAKED, ref cloakedVal, Marshal.SizeOf<int>());
                         isCloaked = (result == 0 && cloakedVal != 0);
                     }
                     catch { }
-
+                }
                 if(isCloaked) return true;
 
                 StringBuilder sb = new StringBuilder(length + 1);
                 WindowsInterop.GetWindowText(hWnd, sb, sb.Capacity);
                 string windowTitle = sb.ToString();
+
                 WindowsInterop.GetWindowThreadProcessId(hWnd, out uint currentPid);
 
-                if(currentPid != 0 && IsValidAppPid(currentPid, $"Window Title Enum Check ('{windowTitle}')", true, threadIdPrefix))
+                if(currentPid != 0 && IsValidAppPid(currentPid, $"Window Title Enum Check ('{windowTitle}')", true))
                 {
                     int score = CalculateMatchScore(windowTitle, extractedName);
                     if(score > 0)
+                    {
                         matches.Add((currentPid, hWnd, windowTitle, score));
+                    }
                 }
             }
             catch { }
-
             return true;
         }, IntPtr.Zero);
 
-        if(cancellationToken.IsCancellationRequested)
-            return 0;
+        if(cancellationToken.IsCancellationRequested) return 0;
 
-        if(matches.Count != 0)
+        if(matches.Count > 0)
         {
-            var bestMatch = matches.OrderByDescending(m => m.score).ThenBy(m => WindowsInterop.IsIconic(m.hwnd)).First();
+            var bestMatch = matches
+                .OrderByDescending(m => m.score)
+                .ThenBy(m => WindowsInterop.IsIconic(m.hwnd))
+                .First();
             foundPid = bestMatch.pid;
         }
-
         return foundPid;
     }
 
     int CalculateMatchScore(string windowTitle, string extractedName)
     {
+        if(string.IsNullOrWhiteSpace(windowTitle) || string.IsNullOrWhiteSpace(extractedName)) return 0;
+
         if(windowTitle.Equals(extractedName, StringComparison.OrdinalIgnoreCase))
             return 100;
-        else if(windowTitle.StartsWith(extractedName, StringComparison.OrdinalIgnoreCase))
+        if(windowTitle.StartsWith(extractedName, StringComparison.OrdinalIgnoreCase))
             return 90;
-        else if(windowTitle.Contains(extractedName, StringComparison.OrdinalIgnoreCase))
+        if(windowTitle.Contains(extractedName, StringComparison.OrdinalIgnoreCase))
             return 70;
-        else if(extractedName.Equals("Firefox", StringComparison.OrdinalIgnoreCase) && windowTitle.EndsWith("- Mozilla Firefox", StringComparison.OrdinalIgnoreCase))
+
+        if(extractedName.Equals("Firefox", StringComparison.OrdinalIgnoreCase) && windowTitle.EndsWith("- Mozilla Firefox", StringComparison.OrdinalIgnoreCase))
             return 88;
 
         return 0;
     }
 
-    bool IsValidAppPid(uint pid, string sourceDescription, bool allowExplorer, string threadIdPrefix)
+    bool IsValidAppPid(uint pid, string sourceDescription, bool allowExplorer)
     {
-        if(pid == 0 || pid == currentProcessId) return false;
+        if(pid == 0 || pid == _currentProcessId) return false;
 
         try
         {
@@ -256,38 +266,44 @@ internal class ProcessIdentifier
 
             string processName = process.ProcessName;
             var systemProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { "explorer", "svchost", "dwm", "csrss", "wininit", "services", "lsass", "smss", "System", "Idle", "Registry", "sihost", "ctfmon", "fontdrvhost", "ApplicationFrameHost", "ShellExperienceHost", "StartMenuExperienceHost", "SearchHost", "SearchApp", "SearchIndexer", "RuntimeBroker", "SecurityHealthSystray", "TextInputHost", "taskhostw", "dllhost" };
+            {
+                "explorer", "svchost", "dwm", "csrss", "wininit", "services", "lsass",
+                "smss", "System", "Idle", "Registry", "sihost", "ctfmon", "fontdrvhost",
+                "ApplicationFrameHost", "ShellExperienceHost", "StartMenuExperienceHost",
+                "SearchHost", "SearchApp", "SearchIndexer", "RuntimeBroker", "SecurityHealthSystray",
+                "TextInputHost", "taskhostw", "dllhost", "consent", "audiodg"
+            };
 
             if(systemProcessNames.Contains(processName))
             {
                 bool explorerAllowedForThisSource = allowExplorer && processName.Equals("explorer", StringComparison.OrdinalIgnoreCase);
                 if(!explorerAllowedForThisSource)
+                {
                     return false;
+                }
             }
             return true;
         }
         catch(ArgumentException) { return false; }
+        catch(InvalidOperationException) { return false; }
         catch(System.ComponentModel.Win32Exception ex)
         {
-            if(ex.NativeErrorCode == 5)
-                return true;
+            if(ex.NativeErrorCode == 5) return true;
             return false;
         }
-        catch(InvalidOperationException) { return false; }
-        catch(Exception) { return false; }
+        catch(Exception)
+        {
+            return false;
+        }
     }
 
     string GetProcessNameSafe(uint pid)
     {
-        try { using var process = Process.GetProcessById((int)pid); return process.ProcessName; }
+        try
+        {
+            using var process = Process.GetProcessById((int)pid);
+            return process.ProcessName;
+        }
         catch { return "Unknown"; }
-    }
-
-    public class IdentificationResult
-    {
-        public uint ProcessId { get; init; }
-        public string ApplicationName { get; init; }
-        public string Method { get; init; }
-        public bool Success => ProcessId != 0;
     }
 }

@@ -44,6 +44,22 @@ public partial class App : Application
         services.AddSingleton<IUiaScannerService, UiaTaskbarScanner>();
         services.AddSingleton<IVolumeKnobManager, VolumeKnobManager>();
 
+        services.AddSingleton<IProcessIdentifier>(provider => {
+            uint currentProcId = 0;
+            try
+            {
+                currentProcId = (uint)Process.GetCurrentProcess().Id;
+            }
+            catch(Exception ex)
+            {
+                Debug.WriteLine($"FATAL: Could not get current process ID for ProcessIdentifier: {ex.Message}");
+            }
+            var mappingManager = provider.GetRequiredService<IMappingManager>();
+            return new ProcessIdentifier(currentProcId, mappingManager);
+        });
+
+        services.AddSingleton<IHotkeyService, HotkeyService>();
+
         services.AddSingleton<ITaskbarMonitor, TaskbarMonitor>();
         services.AddSingleton<IViewModelFactory, ViewModelFactory>();
 
@@ -62,29 +78,21 @@ public partial class App : Application
         _dialogService = ServiceProvider.GetRequiredService<IDialogService>();
         _audioManager = ServiceProvider.GetRequiredService<IAudioManager>();
 
-        if(!InitializeTaskbarMonitorViaDI())
+        _taskbarMonitor = ServiceProvider.GetRequiredService<ITaskbarMonitor>();
+        try
         {
+            _taskbarMonitor.StartMonitoring();
+        }
+        catch(Exception ex)
+        {
+            _audioManager?.Dispose();
+            _taskbarMonitor?.Dispose();
+            MessageBox.Show($"Fatal Error Initializing Application Monitoring:\n{ex.Message}\n\nApplication will exit.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
             return;
         }
 
         CreateSystemTrayIcon();
-    }
-
-    bool InitializeTaskbarMonitorViaDI()
-    {
-        try
-        {
-            _taskbarMonitor = ServiceProvider.GetRequiredService<ITaskbarMonitor>();
-            _taskbarMonitor.StartMonitoring();
-            return true;
-        }
-        catch(Exception ex)
-        {
-            _audioManager?.Dispose();
-            MessageBox.Show($"Fatal Error Initializing Taskbar Monitor:\n{ex.Message}\n\nApplication will exit.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            return false;
-        }
     }
 
     void CreateSystemTrayIcon()
@@ -207,5 +215,9 @@ public partial class App : Application
 
         _audioManager?.Dispose();
         _audioManager = null;
+
+        (ServiceProvider?.GetService<IHotkeyService>() as IDisposable)?.Dispose();
+        (ServiceProvider?.GetService<IWindowsHookService>() as IDisposable)?.Dispose();
+        (ServiceProvider?.GetService<IVolumeKnobManager>() as IDisposable)?.Dispose();
     }
 }
