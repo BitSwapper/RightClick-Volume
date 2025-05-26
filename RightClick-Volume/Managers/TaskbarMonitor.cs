@@ -150,7 +150,7 @@ public class TaskbarMonitor : ITaskbarMonitor
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        AppAudioSession session = audioManager.GetAudioSessionForProcess(identificationResult.ProcessId);
+        AppAudioSession session = audioManager.GetAudioSessionForProcess(identificationResult.ProcessId) as AppAudioSession;
 
         if(session != null)
         {

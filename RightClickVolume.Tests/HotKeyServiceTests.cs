@@ -1,8 +1,10 @@
-﻿using System.ComponentModel;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using RightClickVolume.Interfaces;
-using RightClickVolume.Native;
 using RightClickVolume.Services;
+using RightClickVolume.Native;
+using System;
+using System.ComponentModel;
 
 namespace RightClickVolume.Tests;
 
@@ -26,10 +28,7 @@ public class HotkeyServiceTests
         mockSettingsService.Setup(s => s.Hotkey_Shift).Returns(false);
         mockSettingsService.Setup(s => s.Hotkey_Win).Returns(false);
 
-        hotkeyService = new HotkeyService(
-            mockWindowsHookService.Object,
-            mockSettingsService.Object,
-            mockKeyboardStateProvider.Object);
+        hotkeyService = new HotkeyService(mockWindowsHookService.Object, mockSettingsService.Object, mockKeyboardStateProvider.Object);
     }
 
     [TestMethod]
@@ -50,102 +49,148 @@ public class HotkeyServiceTests
     }
 
     [TestMethod]
-    public void OnGlobalRightMouseClick_WhenCorrectModifiersPressed_RaisesGlobalHotkeyPressed()
+    public void StopMonitoring_WhenNotMonitoring_DoesNothingExtra()
     {
-        mockSettingsService.Setup(s => s.Hotkey_Ctrl).Returns(true);
-        mockSettingsService.Setup(s => s.Hotkey_Alt).Returns(false);
-        mockSettingsService.Setup(s => s.Hotkey_Shift).Returns(false);
-        mockSettingsService.Setup(s => s.Hotkey_Win).Returns(false);
+        hotkeyService.StopMonitoring();
 
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsCtrlPressed()).Returns(true);
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsAltPressed()).Returns(false);
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsShiftPressed()).Returns(false);
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsWinPressed()).Returns(false);
+        mockWindowsHookService.Verify(whs => whs.UninstallMouseHook(), Times.Never);
+    }
+
+
+    [TestMethod]
+    public void OnGlobalRightMouseClick_CtrlRequiredAndPressed_RaisesGlobalHotkeyPressed()
+    {
+        SetupSettings(ctrl: true, alt: false, shift: false, win: false);
+        SetupKeyboardState(ctrl: true, alt: false, shift: false, win: false);
 
         bool eventRaised = false;
         GlobalHotkeyPressedEventArgs eventArgs = null;
-        hotkeyService.GlobalHotkeyPressed += (sender, args) =>
-        {
+        hotkeyService.GlobalHotkeyPressed += (sender, args) => {
             eventRaised = true;
             eventArgs = args;
         };
-
         hotkeyService.StartMonitoring();
 
-        var mouseArgs = new MouseHookEventArgs { X = 100, Y = 200, WindowHandle = (IntPtr)123 };
+        var mouseArgs = new MouseHookEventArgs { X = 10, Y = 20, WindowHandle = (IntPtr)1 };
         mockWindowsHookService.Raise(whs => whs.RightMouseClick += null, mouseArgs);
 
-        Assert.IsTrue(eventRaised, "GlobalHotkeyPressed event was not raised.");
-        Assert.IsNotNull(eventArgs, "Event args should not be null.");
-        Assert.AreEqual(100, eventArgs.X);
-        Assert.AreEqual(200, eventArgs.Y);
-        Assert.AreEqual((IntPtr)123, eventArgs.WindowHandle);
+        Assert.IsTrue(eventRaised);
+        Assert.IsNotNull(eventArgs);
+        Assert.AreEqual(10, eventArgs.X);
+        Assert.AreEqual(20, eventArgs.Y);
+        Assert.AreEqual((IntPtr)1, eventArgs.WindowHandle);
     }
 
     [TestMethod]
-    public void OnGlobalRightMouseClick_WhenIncorrectModifiersPressed_DoesNotRaiseGlobalHotkeyPressed()
+    public void OnGlobalRightMouseClick_CtrlAndAltRequired_CtrlAndAltPressed_RaisesGlobalHotkeyPressed()
     {
         mockSettingsService.Setup(s => s.Hotkey_Ctrl).Returns(true);
-        mockSettingsService.Setup(s => s.Hotkey_Alt).Returns(false);
+        mockSettingsService.Setup(s => s.Hotkey_Alt).Returns(true);
+        mockSettingsService.Setup(s => s.Hotkey_Shift).Returns(false);
+        mockSettingsService.Setup(s => s.Hotkey_Win).Returns(false);
 
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsCtrlPressed()).Returns(false);
+        mockKeyboardStateProvider.Setup(ksp => ksp.IsCtrlPressed()).Returns(true);
         mockKeyboardStateProvider.Setup(ksp => ksp.IsAltPressed()).Returns(true);
         mockKeyboardStateProvider.Setup(ksp => ksp.IsShiftPressed()).Returns(false);
         mockKeyboardStateProvider.Setup(ksp => ksp.IsWinPressed()).Returns(false);
 
+        hotkeyService = new HotkeyService(mockWindowsHookService.Object, mockSettingsService.Object, mockKeyboardStateProvider.Object);
+
         bool eventRaised = false;
         hotkeyService.GlobalHotkeyPressed += (sender, args) => eventRaised = true;
-
         hotkeyService.StartMonitoring();
 
         mockWindowsHookService.Raise(whs => whs.RightMouseClick += null, new MouseHookEventArgs());
 
-        Assert.IsFalse(eventRaised, "GlobalHotkeyPressed event should not have been raised.");
+        Assert.IsTrue(eventRaised, "Event should have been raised with Ctrl and Alt required and pressed.");
     }
 
     [TestMethod]
-    public void OnGlobalRightMouseClick_WhenNoModifiersRequiredAndAnyPressed_DoesNotRaiseGlobalHotkeyPressed()
+    public void OnGlobalRightMouseClick_CtrlRequiredButNotPressed_DoesNotRaiseGlobalHotkeyPressed()
     {
-        mockSettingsService.Setup(s => s.Hotkey_Ctrl).Returns(false);
-        mockSettingsService.Setup(s => s.Hotkey_Alt).Returns(false);
-        mockSettingsService.Setup(s => s.Hotkey_Shift).Returns(false);
-        mockSettingsService.Setup(s => s.Hotkey_Win).Returns(false);
-        var serviceInstance = (HotkeyService)hotkeyService;
+        SetupSettings(ctrl: true, alt: false, shift: false, win: false);
+        SetupKeyboardState(ctrl: false, alt: false, shift: false, win: false);
+
+        bool eventRaised = false;
+        hotkeyService.GlobalHotkeyPressed += (sender, args) => eventRaised = true;
+        hotkeyService.StartMonitoring();
+
+        mockWindowsHookService.Raise(whs => whs.RightMouseClick += null, new MouseHookEventArgs());
+
+        Assert.IsFalse(eventRaised);
+    }
+
+    [TestMethod]
+    public void OnGlobalRightMouseClick_CtrlRequiredAndPressed_AltNotRequiredButPressed_DoesNotRaiseGlobalHotkeyPressed()
+    {
+        SetupSettings(ctrl: true, alt: false, shift: false, win: false);
+        SetupKeyboardState(ctrl: true, alt: true, shift: false, win: false);
+
+        bool eventRaised = false;
+        hotkeyService.GlobalHotkeyPressed += (sender, args) => eventRaised = true;
+        hotkeyService.StartMonitoring();
+
+        mockWindowsHookService.Raise(whs => whs.RightMouseClick += null, new MouseHookEventArgs());
+
+        Assert.IsFalse(eventRaised);
+    }
+
+    [TestMethod]
+    public void OnGlobalRightMouseClick_NoModifiersRequiredBySettings_DoesNotRaiseGlobalHotkeyPressed()
+    {
+        SetupSettings(ctrl: false, alt: false, shift: false, win: false);
         mockSettingsService.Raise(s => s.PropertyChanged += null, new PropertyChangedEventArgs(nameof(ISettingsService.Hotkey_Ctrl)));
 
 
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsCtrlPressed()).Returns(true);
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsAltPressed()).Returns(false);
+        SetupKeyboardState(ctrl: true, alt: false, shift: false, win: false);
 
         bool eventRaised = false;
         hotkeyService.GlobalHotkeyPressed += (sender, args) => eventRaised = true;
-
         hotkeyService.StartMonitoring();
 
         mockWindowsHookService.Raise(whs => whs.RightMouseClick += null, new MouseHookEventArgs());
 
-        Assert.IsFalse(eventRaised, "GlobalHotkeyPressed event should not fire if no modifiers are required by settings.");
+        Assert.IsFalse(eventRaised, "Event should not fire if settings require no modifiers, as 'anyModifierRequired' will be false.");
+    }
+
+
+    [TestMethod]
+    public void SettingsChanged_UpdatesInternalRequiredModifiers_AndReactsCorrectly()
+    {
+        hotkeyService.StartMonitoring();
+
+        SetupSettings(ctrl: true, alt: true, shift: false, win: false);
+        mockSettingsService.Raise(s => s.PropertyChanged += null, new PropertyChangedEventArgs(nameof(ISettingsService.Hotkey_Alt)));
+
+        SetupKeyboardState(ctrl: true, alt: true, shift: false, win: false);
+
+        bool eventRaised = false;
+        hotkeyService.GlobalHotkeyPressed += (sender, args) => eventRaised = true;
+
+        mockWindowsHookService.Raise(whs => whs.RightMouseClick += null, new MouseHookEventArgs());
+
+        Assert.IsTrue(eventRaised, "Event should be raised after settings update and correct new key press.");
     }
 
     [TestMethod]
-    public void SettingsChanged_UpdatesInternalRequiredModifiers()
+    public void SettingsChanged_ToNoModifiersRequired_PreventsEvent()
     {
-        mockSettingsService.Setup(s => s.Hotkey_Alt).Returns(true);
-        mockSettingsService.Raise(s => s.PropertyChanged += null, new PropertyChangedEventArgs(nameof(ISettingsService.Hotkey_Alt)));
+        hotkeyService.StartMonitoring();
 
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsCtrlPressed()).Returns(true);
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsAltPressed()).Returns(true);
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsShiftPressed()).Returns(false);
-        mockKeyboardStateProvider.Setup(ksp => ksp.IsWinPressed()).Returns(false);
+        SetupSettings(ctrl: false, alt: false, shift: false, win: false);
+        mockSettingsService.Raise(s => s.PropertyChanged += null, new PropertyChangedEventArgs(nameof(ISettingsService.Hotkey_Ctrl)));
+
+
+        SetupKeyboardState(ctrl: true, alt: false, shift: false, win: false);
 
         bool eventRaised = false;
         hotkeyService.GlobalHotkeyPressed += (sender, args) => eventRaised = true;
 
-        hotkeyService.StartMonitoring();
         mockWindowsHookService.Raise(whs => whs.RightMouseClick += null, new MouseHookEventArgs());
 
-        Assert.IsTrue(eventRaised, "Event should be raised after settings update and correct key press.");
+        Assert.IsFalse(eventRaised, "Event should not fire if settings changed to require no modifiers.");
     }
+
 
     [TestMethod]
     public void Dispose_StopsMonitoringAndUnsubscribesFromSettings()
@@ -154,5 +199,21 @@ public class HotkeyServiceTests
         hotkeyService.Dispose();
 
         mockWindowsHookService.Verify(whs => whs.UninstallMouseHook(), Times.Once);
+    }
+
+    private void SetupSettings(bool ctrl, bool alt, bool shift, bool win)
+    {
+        mockSettingsService.Setup(s => s.Hotkey_Ctrl).Returns(ctrl);
+        mockSettingsService.Setup(s => s.Hotkey_Alt).Returns(alt);
+        mockSettingsService.Setup(s => s.Hotkey_Shift).Returns(shift);
+        mockSettingsService.Setup(s => s.Hotkey_Win).Returns(win);
+    }
+
+    private void SetupKeyboardState(bool ctrl, bool alt, bool shift, bool win)
+    {
+        mockKeyboardStateProvider.Setup(ksp => ksp.IsCtrlPressed()).Returns(ctrl);
+        mockKeyboardStateProvider.Setup(ksp => ksp.IsAltPressed()).Returns(alt);
+        mockKeyboardStateProvider.Setup(ksp => ksp.IsShiftPressed()).Returns(shift);
+        mockKeyboardStateProvider.Setup(ksp => ksp.IsWinPressed()).Returns(win);
     }
 }

@@ -35,36 +35,24 @@ public class AudioManager : IAudioManager
     {
         if(processIdToNameCache.TryGetValue(processId, out string cachedName))
             return cachedName;
-
         try
         {
-            Process process = Process.GetProcessById((int)processId);
+            using Process process = Process.GetProcessById((int)processId);
             string processName = process.ProcessName;
             processIdToNameCache[processId] = processName;
             return processName;
         }
-        catch(ArgumentException)
-        {
-            processIdToNameCache.Remove(processId);
-            processIdToPathCache.Remove(processId);
-            return null;
-        }
-        catch(InvalidOperationException)
-        {
-            processIdToNameCache.Remove(processId);
-            processIdToPathCache.Remove(processId);
-            return null;
-        }
+        catch { }
+        return null;
     }
 
     string GetProcessPathWithCaching(uint processId)
     {
         if(processIdToPathCache.TryGetValue(processId, out string cachedPath))
             return cachedPath;
-
         try
         {
-            Process process = Process.GetProcessById((int)processId);
+            using Process process = Process.GetProcessById((int)processId);
             string mainModulePath = process.MainModule?.FileName;
             if(!string.IsNullOrEmpty(mainModulePath))
             {
@@ -72,32 +60,14 @@ public class AudioManager : IAudioManager
                 return mainModulePath;
             }
         }
-        catch(ArgumentException)
-        {
-            processIdToNameCache.Remove(processId);
-            processIdToPathCache.Remove(processId);
-        }
-        catch(InvalidOperationException)
-        {
-            processIdToNameCache.Remove(processId);
-            processIdToPathCache.Remove(processId);
-        }
-        catch(System.ComponentModel.Win32Exception ex)
-        {
-            Debug.WriteLine($"Win32Exception getting MainModule for PID {processId}: {ex.Message} (NativeErrorCode: {ex.NativeErrorCode})");
-        }
-        catch(NotSupportedException)
-        {
-            Debug.WriteLine($"NotSupportedException getting MainModule for PID {processId}.");
-        }
+        catch { }
         processIdToPathCache[processId] = string.Empty;
         return null;
     }
 
-    public AppAudioSession GetAudioSessionForProcess(uint targetProcessId)
+    public IAppAudioSession GetAudioSessionForProcess(uint targetProcessId)
     {
         if(targetProcessId == 0) return null;
-
         try
         {
             RefreshDefaultDevice();
@@ -108,14 +78,14 @@ public class AudioManager : IAudioManager
 
             for(int i = 0; i < sessionEnumerator.Count; i++)
             {
-                AudioSessionControl session = null;
+                AudioSessionControl sessionControl = null;
                 try
                 {
-                    session = sessionEnumerator[i];
-                    if(session.GetProcessID == targetProcessId)
+                    sessionControl = sessionEnumerator[i];
+                    if(sessionControl.GetProcessID == targetProcessId)
                     {
                         string processName = GetProcessNameWithCaching(targetProcessId);
-                        string displayName = session.DisplayName;
+                        string displayName = sessionControl.DisplayName;
 
                         if(string.IsNullOrEmpty(displayName) && !string.IsNullOrEmpty(processName))
                         {
@@ -125,33 +95,31 @@ public class AudioManager : IAudioManager
                         else if(string.IsNullOrEmpty(displayName))
                             displayName = "Unknown App";
 
-                        return new AppAudioSession(session, displayName, targetProcessId);
+                        return new AppAudioSession(sessionControl, displayName, targetProcessId);
+                    }
+                    else
+                    {
+                        sessionControl.Dispose();
+                        sessionControl = null;
                     }
                 }
                 catch(Exception ex)
                 {
                     Debug.WriteLine($"Error processing session {i} for PID {targetProcessId}: {ex.Message}");
-                }
-                finally
-                {
-                    if(session != null && session.GetProcessID != targetProcessId)
-                    {
-                        session.Dispose();
-                    }
+                    sessionControl?.Dispose();
                 }
             }
         }
         catch(Exception ex)
         {
             Debug.WriteLine($"Error in GetAudioSessionForProcess(PID: {targetProcessId}): {ex.Message}");
-            return null;
         }
         return null;
     }
 
-    public List<AppAudioSession> GetAllAudioSessions()
+    public List<IAppAudioSession> GetAllAudioSessions()
     {
-        var audioSessions = new List<AppAudioSession>();
+        var audioSessions = new List<IAppAudioSession>();
         try
         {
             RefreshDefaultDevice();
@@ -162,26 +130,23 @@ public class AudioManager : IAudioManager
 
             for(int i = 0; i < sessionEnumerator.Count; i++)
             {
-                AudioSessionControl session = null;
+                AudioSessionControl sessionControl = null;
                 try
                 {
-                    session = sessionEnumerator[i];
-                    if(session.State == AudioSessionState.AudioSessionStateExpired)
+                    sessionControl = sessionEnumerator[i];
+                    if(sessionControl.State == AudioSessionState.AudioSessionStateExpired)
                     {
-                        session.Dispose();
+                        sessionControl.Dispose();
                         continue;
                     }
-
-                    uint processId = session.GetProcessID;
+                    uint processId = sessionControl.GetProcessID;
                     if(processId == 0)
                     {
-                        session.Dispose();
+                        sessionControl.Dispose();
                         continue;
                     }
-
-
                     string processName = GetProcessNameWithCaching(processId);
-                    string displayName = session.DisplayName;
+                    string displayName = sessionControl.DisplayName;
 
                     if(string.IsNullOrEmpty(displayName) && !string.IsNullOrEmpty(processName))
                     {
@@ -191,12 +156,12 @@ public class AudioManager : IAudioManager
                     else if(string.IsNullOrEmpty(displayName))
                         displayName = $"PID: {processId}";
 
-                    audioSessions.Add(new AppAudioSession(session, displayName, processId));
+                    audioSessions.Add(new AppAudioSession(sessionControl, displayName, processId));
                 }
                 catch(Exception ex)
                 {
                     Debug.WriteLine($"Error processing session in GetAllAudioSessions: {ex.Message}");
-                    session?.Dispose();
+                    sessionControl?.Dispose();
                 }
             }
         }
@@ -207,15 +172,14 @@ public class AudioManager : IAudioManager
         return audioSessions;
     }
 
-    public AppAudioSession GetAudioSessionForWindow(IntPtr hwnd)
+    public IAppAudioSession GetAudioSessionForWindow(IntPtr hwnd)
     {
         try
         {
             Native.WindowsInterop.GetWindowThreadProcessId(hwnd, out uint processId);
-            if(processId == 0)
-                return null;
+            if(processId == 0) return null;
 
-            var session = GetAudioSessionForProcess(processId);
+            IAppAudioSession session = GetAudioSessionForProcess(processId);
             if(session != null) return session;
 
             return TryGetParentWindowSession(hwnd, processId);
@@ -223,11 +187,11 @@ public class AudioManager : IAudioManager
         catch(Exception ex)
         {
             Debug.WriteLine($"Error in GetAudioSessionForWindow: {ex.Message}");
-            return null;
         }
+        return null;
     }
 
-    AppAudioSession TryGetParentWindowSession(IntPtr hwnd, uint childProcessId)
+    IAppAudioSession TryGetParentWindowSession(IntPtr hwnd, uint childProcessId)
     {
         try
         {
@@ -244,8 +208,8 @@ public class AudioManager : IAudioManager
         catch(Exception ex)
         {
             Debug.WriteLine($"Error in TryGetParentWindowSession: {ex.Message}");
-            return null;
         }
+        return null;
     }
 
     void RefreshDefaultDevice()
@@ -254,7 +218,10 @@ public class AudioManager : IAudioManager
         {
             defaultPlaybackDevice?.Dispose();
             defaultPlaybackDevice = null;
-            defaultPlaybackDevice = deviceEnumerator?.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            if(deviceEnumerator != null)
+            {
+                defaultPlaybackDevice = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            }
         }
         catch(Exception ex)
         {

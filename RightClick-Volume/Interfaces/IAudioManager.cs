@@ -6,7 +6,7 @@ namespace RightClickVolume.Interfaces;
 
 public interface IAudioManager : IDisposable
 {
-    AppAudioSession GetAudioSessionForProcess(uint targetProcessId);
-    List<AppAudioSession> GetAllAudioSessions();
-    AppAudioSession GetAudioSessionForWindow(IntPtr hwnd);
+    IAppAudioSession GetAudioSessionForProcess(uint targetProcessId);
+    List<IAppAudioSession> GetAllAudioSessions();
+    IAppAudioSession GetAudioSessionForWindow(IntPtr hwnd);
 }

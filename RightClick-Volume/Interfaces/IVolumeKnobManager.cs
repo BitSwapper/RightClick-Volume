@@ -1,11 +1,11 @@
 ﻿using System;
-using RightClickVolume.Models;
+using RightClickVolume.Interfaces;
 
 namespace RightClickVolume.Interfaces;
 
 public interface IVolumeKnobManager : IDisposable
 {
-    void ShowKnobForSession(int clickX, int clickY, AppAudioSession session);
+    void ShowKnobForSession(int clickX, int clickY, IAppAudioSession session);
     void HideAllKnobs();
     void StartCleanupTask();
     void StopCleanupTask();
